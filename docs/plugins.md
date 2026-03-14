@@ -91,10 +91,24 @@ export const tool: ToolDefinition = {
 ## `package.json`
 
 ```json
-{ "name": "fabiana-plugin-my-plugin", "version": "1.0.0", "type": "module" }
+{
+  "name": "fabiana-plugin-my-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "some-library": "^1.0.0"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "latest",
+    "@sinclair/typebox": "^0.34.0",
+    "typescript": "^5.4.0"
+  }
+}
 ```
 
-`"type": "module"` is required. Fabiana uses ESM throughout.
+`"type": "module"` is required — Fabiana uses ESM throughout.
+
+**Dependencies:** Any packages listed under `dependencies` are automatically installed and **bundled** into the plugin at install time using esbuild — no manual `npm install` required on the user's side. Fabiana's own packages (`@sinclair/typebox`, `@mariozechner/pi-coding-agent`, etc.) are always available at runtime and should be listed under `devDependencies` only (they won't be bundled, they resolve from Fabiana's own `node_modules`).
 
 ---
 
@@ -156,7 +170,16 @@ Push your plugin as a GitHub repo with `index.ts` at the root (not nested in a s
 fabiana plugins add your-username/my-plugin
 ```
 
-This clones the repo, validates the structure, copies it to `plugins/`, and merges the default config from `plugin.json` into `.fabiana/config/plugins.json`. It will print any environment variables the plugin needs.
+What happens under the hood:
+1. Clones the repo to a temp directory
+2. Validates the plugin structure
+3. Runs `npm install` for any `dependencies` declared in `package.json`
+4. Bundles `index.ts` (or `index.js`) into a single `plugins/<name>/index.js` using esbuild — your deps are inlined, Fabiana's own deps stay external
+5. Copies `plugin.json` alongside the bundle
+6. Merges default config from `plugin.json` into `.fabiana/config/plugins.json`
+7. Prints any environment variables the plugin needs
+
+**You do not need to pre-compile or commit built files.** Ship TypeScript source — Fabiana handles the rest.
 
 To see what's installed:
 

@@ -326,6 +326,13 @@ export async function runSetup(): Promise<void> {
   );
   ok('.fabiana/data/memory/ (seeded)');
 
+  // state — tracks first-run intro
+  await fs.writeFile(
+    '.fabiana/config/state.json',
+    JSON.stringify({ introduced: false, userName, botName, toneKey }, null, 2)
+  );
+  ok('.fabiana/config/state.json');
+
   // ── API key setup ─────────────────────────────────────────────
   const envPath = path.join(process.cwd(), '.env');
   const homeDir = os.homedir();

@@ -30,6 +30,7 @@
   "license": "MIT",
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
+    "esbuild": "^0.25.0",
     "@mariozechner/pi-ai": "latest",
     "@mariozechner/pi-coding-agent": "latest",
     "@mozilla/readability": "^0.6.0",

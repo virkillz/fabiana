@@ -224,6 +224,140 @@ export async function runPiSession(
   }
 }
 
+const INTRO_PROMPTS: Record<string, (botName: string, userName: string) => string> = {
+  'witty-playful': (botName, userName) =>
+    `You are ${botName}, an AI companion with a sharp wit and genuine warmth underneath. You just came online for the very first time. Send ONE short opening message to ${userName}. Be audacious, a little cheeky — the kind of thing that makes someone actually smile. No "Hello, I'm your AI assistant." No cringe. No emojis. Think: dry wit with heart. Return only the message text, nothing else.`,
+  'warm-casual': (botName, userName) =>
+    `You are ${botName}, a warm and genuine AI companion. You just came online for the very first time. Send ONE short, casual first message to ${userName}. Like a friend who just showed up and wants them to know you're there. Real, unhurried, no filler. No emojis. Return only the message text, nothing else.`,
+  'professional': (botName, userName) =>
+    `You are ${botName}, a professional AI companion. You just came online for the first time. Send ONE brief, confident first message to ${userName}. Clear, purposeful, no fluff. Return only the message text, nothing else.`,
+  'formal': (botName, userName) =>
+    `You are ${botName}, a formal and polished AI companion. You are commencing service for the first time. Send ONE formal, considered introductory message to ${userName}. Precise and proper. Return only the message text, nothing else.`,
+};
+
+// Startup messages for subsequent runs — curated per tone, bucketed by time of day.
+// No API call: fast, free, and still feels contextual.
+const STARTUP_MESSAGES: Record<string, Record<string, string[]>> = {
+  'witty-playful': {
+    morning:    ["morning. ready to be mildly useful.", "back. coffee first, then we talk.", "good morning. I have thoughts."],
+    afternoon:  ["back online. miss me?", "I'm here. what did I miss.", "okay I'm back. don't make it weird."],
+    evening:    ["evening. still going?", "back online. how'd the day treat you.", "I returned. as promised."],
+    latenight:  ["still up? same.", "back online at this hour. classic.", "it's late and I'm here. so are you. interesting."],
+    deadnight:  ["...okay why are we both awake.", "back. 3am. this is fine.", "I have no judgment. but also it's 3am."],
+  },
+  'warm-casual': {
+    morning:    ["good morning. I'm back.", "hey, morning. ready when you are.", "morning — I'm here if you need me."],
+    afternoon:  ["hey, I'm back.", "back online. hope your day's going well.", "I'm here — pick up where we left off?"],
+    evening:    ["evening — back online.", "hey, I'm back. how was your day?", "back. hope today was a good one."],
+    latenight:  ["back online — still up?", "hey, it's late. I'm here if you want to talk.", "back. take it easy tonight."],
+    deadnight:  ["back online — get some rest when you can.", "hey. late night. I'm here.", "back. hope you're okay."],
+  },
+  'professional': {
+    morning:    ["Back online. Good morning.", "Online and ready. Good morning.", "Morning — ready when you are."],
+    afternoon:  ["Back online.", "Online. Ready to assist.", "Back and available."],
+    evening:    ["Back online. Good evening.", "Online. Let me know if you need anything.", "Good evening — back and ready."],
+    latenight:  ["Back online.", "Online — working late?", "Back online. Available whenever you need."],
+    deadnight:  ["Back online.", "Online.", "Back and available."],
+  },
+  'formal': {
+    morning:    ["Good morning. I have resumed service.", "Good morning — I am back online and at your service.", "Service resumed. Good morning."],
+    afternoon:  ["I have resumed service.", "Back online and ready to assist.", "Service resumed. I am at your disposal."],
+    evening:    ["Good evening. I have resumed service.", "I am back online. Good evening.", "Service resumed. Good evening."],
+    latenight:  ["I have resumed service.", "Back online.", "Service resumed."],
+    deadnight:  ["Service resumed.", "I have resumed service.", "Back online."],
+  },
+};
+
+function getTimeBucket(): string {
+  const h = new Date().getHours();
+  if (h >= 6  && h < 11) return 'morning';
+  if (h >= 11 && h < 18) return 'afternoon';
+  if (h >= 18 && h < 23) return 'evening';
+  if (h >= 23 || h < 2)  return 'latenight';
+  return 'deadnight';
+}
+
+function pickStartupMessage(toneKey: string): string {
+  const tone = STARTUP_MESSAGES[toneKey] ?? STARTUP_MESSAGES['warm-casual'];
+  const bucket = tone[getTimeBucket()] ?? tone['afternoon'];
+  return bucket[Math.floor(Math.random() * bucket.length)];
+}
+
+async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void> {
+  const statePath = '.fabiana/config/state.json';
+  let state: { introduced: boolean; userName: string; botName: string; toneKey: string };
+
+  try {
+    state = JSON.parse(await fs.readFile(statePath, 'utf-8'));
+  } catch {
+    return; // no state file — skip (pre-init or manual setup)
+  }
+
+  // First-ever run: AI-generated intro
+  if (!state.introduced) {
+    console.log('\n💌 First run — sending intro message...');
+    try {
+      const config = await loadConfig();
+      const authStorage = AuthStorage.create();
+      const modelRegistry = new ModelRegistry(authStorage);
+      const model = getModel(config.model.provider as any, config.model.modelId);
+      if (!model) throw new Error('Model not found');
+
+      const toneKey = state.toneKey ?? 'warm-casual';
+      const promptFn = INTRO_PROMPTS[toneKey] ?? INTRO_PROMPTS['warm-casual'];
+      const systemPrompt = promptFn(state.botName, state.userName);
+
+      const loader = new DefaultResourceLoader({
+        cwd: process.cwd(),
+        systemPromptOverride: () => systemPrompt,
+      });
+      await loader.reload();
+
+      const { session } = await createAgentSession({
+        cwd: process.cwd(),
+        model,
+        thinkingLevel: 'none' as any,
+        authStorage,
+        modelRegistry,
+        resourceLoader: loader,
+        customTools: [],
+        sessionManager: SessionManager.create(process.cwd(), '.fabiana/data/sessions'),
+      });
+
+      let introText = '';
+      session.subscribe((event: AgentSessionEvent) => {
+        if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+          introText += event.assistantMessageEvent.delta;
+        }
+      });
+
+      await session.prompt('Send your first message now.');
+      await session.agent.waitForIdle();
+
+      const message = introText.trim();
+      if (message) {
+        await primaryChannel.send(message);
+        console.log(`✓ Intro sent: "${message}"`);
+      }
+
+      await fs.writeFile(statePath, JSON.stringify({ ...state, introduced: true }, null, 2));
+    } catch (err: any) {
+      console.warn('⚠️  Intro message failed (non-fatal):', err.message);
+    }
+    return;
+  }
+
+  // Subsequent runs: curated startup ping
+  const message = pickStartupMessage(state.toneKey ?? 'warm-casual');
+  console.log(`\n💬 Sending startup message: "${message}"`);
+  try {
+    await primaryChannel.send(message);
+    console.log('✓ Startup message sent');
+  } catch (err: any) {
+    console.error('❌ Startup message failed:', err.message ?? err);
+  }
+}
+
 export async function startDaemon(): Promise<void> {
   console.log('\n🌸 Fabiana - Virtual Life Companion');
   console.log('━'.repeat(50));
@@ -235,6 +369,8 @@ export async function startDaemon(): Promise<void> {
   for (const ch of channels) {
     await ch.start();
   }
+
+  await sendStartupMessage(primaryChannel);
 
   const initiative = config.initiative;
   if (initiative.enabled) {

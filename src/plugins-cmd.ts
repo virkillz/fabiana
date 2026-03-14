@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
@@ -91,6 +92,55 @@ async function validatePluginDir(dir: string): Promise<ValidationResult> {
   return { ok: errors.length === 0, errors };
 }
 
+// ─── Build ────────────────────────────────────────────────────────────────────
+
+async function buildPlugin(srcDir: string, destDir: string): Promise<void> {
+  // Determine entry point (prefer TypeScript source)
+  let entryFile: string;
+  try {
+    await fs.access(path.join(srcDir, 'index.ts'));
+    entryFile = 'index.ts';
+  } catch {
+    entryFile = 'index.js';
+  }
+
+  // Install plugin's own deps if it has any
+  const pluginPkgRaw = await fs.readFile(path.join(srcDir, 'package.json'), 'utf-8');
+  const pluginPkg = JSON.parse(pluginPkgRaw) as Record<string, unknown>;
+  const ownDeps = Object.keys({
+    ...(pluginPkg.dependencies as object ?? {}),
+    ...(pluginPkg.optionalDependencies as object ?? {}),
+  });
+  if (ownDeps.length > 0) {
+    console.log(`  Installing ${ownDeps.length} plugin dependency(ies)...`);
+    await execFileAsync('npm', ['install', '--omit=dev'], { cwd: srcDir, timeout: 60_000 });
+  }
+
+  // Load fabiana's own deps so we can mark them as external (they resolve from
+  // fabiana's node_modules at runtime — no need to bundle them)
+  const selfPkg = JSON.parse(
+    await fs.readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8')
+  ) as Record<string, unknown>;
+  const external = Object.keys({
+    ...(selfPkg.dependencies as object ?? {}),
+    ...(selfPkg.devDependencies as object ?? {}),
+  });
+
+  await fs.mkdir(destDir, { recursive: true });
+
+  const { build } = await import('esbuild');
+  await build({
+    entryPoints: [path.join(srcDir, entryFile)],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    outfile: path.join(destDir, 'index.js'),
+    external,
+    absWorkingDir: srcDir,
+    logLevel: 'silent',
+  });
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 export async function pluginsAdd(repo: string): Promise<void> {
@@ -155,13 +205,17 @@ export async function pluginsAdd(repo: string): Promise<void> {
       console.log(chalk.yellow('  ⚠ No plugin.json — env vars and default config will not be set automatically'));
     }
 
-    // Copy plugin files to plugins/ (excluding .git)
-    await fs.mkdir(PLUGINS_DIR, { recursive: true });
-    await fs.cp(tmpDir, destDir, {
-      recursive: true,
-      filter: (src) => !src.includes(`${path.sep}.git`),
-    });
+    // Bundle the plugin into plugins/<name>/index.js
+    console.log('  Bundling plugin...');
+    await buildPlugin(tmpDir, destDir);
     destCreated = true;
+
+    // Copy plugin.json manifest alongside the bundle (needed by pluginsList / doctor)
+    try {
+      await fs.copyFile(path.join(tmpDir, 'plugin.json'), path.join(destDir, 'plugin.json'));
+    } catch {
+      // No plugin.json — optional, skip
+    }
 
     // Merge default config into plugins.json
     const pluginsConfig = await loadPluginsConfig(PLUGINS_CONFIG_PATH);

@@ -33,14 +33,16 @@ export const tool: ToolDefinition = {
 
       switch (action) {
         case 'today': {
-          const today = date || new Date().toISOString().split('T')[0];
-          args = [email, 'events', 'primary', '--from', today, '--to', today];
+          const targetDate = date || new Date().toISOString().split('T')[0];
+          const from = `${targetDate}T00:00:00Z`;
+          const to = `${targetDate}T23:59:59Z`;
+          args = [email, 'events', 'primary', '--from', from, '--to', to];
           break;
         }
 
         case 'upcoming': {
-          const from = new Date().toISOString().split('T')[0];
-          const to = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const from = new Date().toISOString();
+          const to = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
           args = [email, 'events', 'primary', '--from', from, '--to', to];
           break;
         }

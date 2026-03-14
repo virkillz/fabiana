@@ -3,37 +3,37 @@
 </p>
 
 <h1 align="center">Fabiana</h1>
-<p align="center"><em>Your AI life companion that remembers everything, proactively engages, and helps organize your life.</em></p>
+<p align="center"><em>she texts first.</em></p>
 
 ---
 
-## Why Fabiana?
+## The pitch
 
-There are plenty of AI assistants and **claws** out there optimizing for *usefulness*. Fabiana optimizes for **good vibes**.
+Every other AI assistant sits there, waiting, blinking, and answer to you like an overpolite receptionist with fake smiles. Fabiana doesn't wait. She has places to be, things she noticed, a story she thought you'd find interesting. She'll message you before you even open the app.
 
-The idea is simple: an AI that checks in on you. Asks about your day. Builds a useful memory of your life over time — your habits, your people, your goals — while actually feeling like a companion rather than a productivity tool. She talks in short bursts, initiates conversations like a normal human would, helps you remember things, tracks your diet, occasionally roasts you, and occasionally drops a news story she thought you'd find interesting.
+She's not an assistant. She's a companion. One who remembers your sister's name, knows you hate meetings before 10am, and will roast you (gently) if you said you'd go to bed early and you're still up at 1am asking her about the news.
 
-No dashboards. No commands to remember. Just Telegram.
-
----
-
-## What Makes Fabiana Different
-
-**She messages you first.** Most AI assistants wait. Fabiana doesn't. She has a schedule and a TODO list she manages herself — and she'll reach out when she thinks there's something worth saying.
-
-**She remembers.** Every conversation gets distilled into a plain-text memory system. Next week she still knows your sister's name, that you've been trying to sleep earlier, and that you hate meetings before 10am.
-
-**The memory is yours.** All data lives in `.fabiana/data/` as plain text files. You can read it, edit it, back it up, or wipe it. No black boxes. No vendor lock-in. No vector embeddings to decode.
-
-**She's extensible.** Drop a plugin into `plugins/` and she gains a new capability at next startup. 
-
-**She's simple enough to trust.** The codebase is intentionally small. TypeScript, a handful of dependencies, plain text files. You can read the whole thing in an afternoon. Or ask an LLM to explain it to you.
+No dashboards. No commands to remember. She slides into your DM.
 
 ---
 
-## How It Works
+## What she does
 
-Fabiana runs as a background daemon and does three things on a loop:
+**She messages you first.** She has a schedule and a TODO list she manages herself. She'll reach out when there's something worth saying — not when you remember to ask.
+
+**She remembers everything.** Every conversation gets distilled into plain-text memory. Next week she still knows what you're working on, who you mentioned, and what's stressing you out. Next month too.
+
+**Her memory is yours.** All data lives in `.fabiana/data/` as plain text files. Read it, edit it, back it up, delete it. No black boxes. No vector embeddings. No vendor lock-in.
+
+**She learns new tricks.** Drop a plugin into `plugins/` and she wakes up with a new capability. Web search, calendar, Hacker News — or whatever you build.
+
+**She's small enough to trust.** The codebase is intentionally tiny. TypeScript, a handful of dependencies, plain text files. You can read the whole thing in an afternoon.
+
+---
+
+## How it works
+
+Fabiana runs as a background daemon doing three things on a loop:
 
 | Mode | What it does |
 |------|-------------|
@@ -41,9 +41,9 @@ Fabiana runs as a background daemon and does three things on a loop:
 | **Initiative** | Checks her TODO list and calendar, decides if there's something worth telling you |
 | **Consolidation** | Every night at midnight, distills the day's conversations into structured memory |
 
-She's built on [Pi SDK](https://github.com/mariozechner/pi) — the same LLM harness that powers OpenClaw. Pi supports Anthropic, OpenAI, Google Gemini, Groq, Mistral, Amazon Bedrock, and more — including [OpenRouter](https://openrouter.ai) as a meta-provider for 240+ models. You choose the provider and model.
+She's built on [Pi SDK](https://github.com/mariozechner/pi) — which means she runs on Anthropic, OpenAI, Google Gemini, Groq, Mistral, Amazon Bedrock, and more. [OpenRouter](https://openrouter.ai) is the default because one key gets you 240+ models.
 
-### Memory — Plain Text, Always
+### Memory — plain text, always
 
 ```
 .fabiana/data/memory/
@@ -55,21 +55,17 @@ She's built on [Pi SDK](https://github.com/mariozechner/pi) — the same LLM har
 └── diary/               ← daily entries (auto-written)
 ```
 
-Memory is tiered — hot files load every session, warm files load when relevant, cold files are archived but searchable. The agent writes and organizes its own memory. You can read any of it at any time.
-
-### Plugins
-
-Tools live in `plugins/` and are auto-discovered at startup. Fabiana ships with three: `brave_search`, `calendar`, and `hackernews`. Adding your own is a single TypeScript file — see [Plugin Development](docs/plugins.md).
+Memory is tiered — hot files load every session, warm files load when relevant, cold files sit in the archive, searchable when needed. She writes and organizes it herself. You can read any of it any time.
 
 ---
 
 ## Installation
 
-### Prerequisites
+### What you need
 
 - **Node.js ≥ 22**
-- A **Telegram bot** (takes 2 minutes via [@BotFather](https://t.me/BotFather))
-- An API key for your chosen LLM provider — [OpenRouter](https://openrouter.ai/keys) is the easiest starting point (one key for 240+ models)
+- A **Telegram bot** — takes 2 minutes via [@BotFather](https://t.me/BotFather)
+- An LLM API key — [OpenRouter](https://openrouter.ai/keys) is the easiest starting point (one key, 240+ models)
 
 ### Setup
 
@@ -77,7 +73,10 @@ Tools live in `plugins/` and are auto-discovered at startup. Fabiana ships with 
 git clone https://github.com/your-username/fabiana
 cd fabiana
 npm install
+fabiana init
 ```
+
+`fabiana init` walks you through the whole setup. Or do it manually:
 
 Create a `.env` file:
 
@@ -85,54 +84,31 @@ Create a `.env` file:
 TELEGRAM_BOT_TOKEN=your_token_from_botfather
 TELEGRAM_CHAT_ID=your_chat_id
 
-# Add the key for whichever provider you choose (see docs/providers.md)
-OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (default)
-# ANTHROPIC_API_KEY=...           # Anthropic direct
-# OPENAI_API_KEY=...              # OpenAI direct
-# GEMINI_API_KEY=...              # Google Gemini direct
+# Pick one (or more)
+OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (recommended — covers everything)
+ANTHROPIC_API_KEY=...             # Direct Anthropic
+OPENAI_API_KEY=...                # Direct OpenAI
+GEMINI_API_KEY=...                # Direct Google
 
-# Optional — enables web search
-BRAVE_API_KEY=your_brave_api_key
-
-# Optional — enables calendar awareness
-GOOGLE_CALENDAR_EMAIL=your@gmail.com
+# Optional extras
+BRAVE_API_KEY=...                 # Web search
+GOOGLE_CALENDAR_EMAIL=your@gmail.com  # Calendar awareness
 ```
 
 **Getting your Telegram credentials:**
 1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token
 2. Message [@userinfobot](https://t.me/userinfobot) → copy your numeric ID
 
-### Credential Configuration
+### Check everything's wired up
 
-Fabiana supports two ways to set credentials — choose what works best for you:
-
-**Option 1: `.env` file (simpler)**  
-Copy `.env.example` to `.env` and fill in your values. Great for local development and getting started quickly.
-
-**Option 2: Environment variables (more secure)**
-Set credentials directly in your shell or deployment environment:
 ```bash
-export TELEGRAM_BOT_TOKEN=your_token
-export TELEGRAM_CHAT_ID=your_chat_id
-export OPENROUTER_API_KEY=sk-or-v1-...  # or whichever provider key you're using
+fabiana doctor
 ```
 
-This approach keeps secrets out of files and is preferred for production deployments or shared environments.
-
-Both methods work identically — Fabiana will use whichever you provide.
-
-### Run the health check
+Verifies your environment, credentials, plugins, and data directories. Fix anything it flags, then:
 
 ```bash
-npx tsx src/cli.ts doctor
-```
-
-This verifies your environment, credentials, plugins, and data directories before you start.
-
-### Start Fabiana
-
-```bash
-npm run dev
+fabiana start
 ```
 
 She'll start listening on Telegram and schedule herself from there.
@@ -143,39 +119,21 @@ She'll start listening on Telegram and schedule herself from there.
 
 | Command | What it does |
 |---------|-------------|
-| `fabiana start` | Start the daemon (default) |
-| `fabiana initiative` | Trigger a one-time proactive check |
-| `fabiana consolidate` | Trigger a one-time memory consolidation |
-| `fabiana doctor` | Check environment, credentials, plugins |
-| `fabiana backup` | Archive `.fabiana/data/` into a timestamped `.tar.gz` |
-| `fabiana restore <file>` | Restore data from a backup archive |
-| `fabiana plugins add <user/repo>` | Install a plugin from GitHub |
-| `fabiana plugins list` | List installed plugins and their status |
+| `fabiana init` | First time? Let's get acquainted |
+| `fabiana start` | Wake her up — she'll take it from there |
+| `fabiana initiative` | Make her think. Just once. (good for testing) |
+| `fabiana consolidate` | Tidy up the mind palace |
+| `fabiana doctor` | Is everything okay in there? Let's check |
+| `fabiana backup` | Save her brain to a zip file |
+| `fabiana restore <file>` | Bring her back from the archive |
+| `fabiana plugins add <user/repo>` | Teach her a new trick from GitHub |
+| `fabiana plugins list` | What can she do? |
 
 ---
 
-## Optional: Google Calendar
+## Choosing a model
 
-```bash
-npm install -g @mariozechner/gccli
-gccli accounts credentials ~/path/to/oauth-credentials.json
-gccli accounts add your@gmail.com
-```
-
-Then add `GOOGLE_CALENDAR_EMAIL=your@gmail.com` to `.env`.
-
----
-
-## Optional: Brave Search
-
-1. Create a free account at [api-dashboard.search.brave.com](https://api-dashboard.search.brave.com/register)
-2. Create an API key and add `BRAVE_API_KEY=your_key` to `.env`
-
----
-
-## Choosing a Provider and Model
-
-Edit `config.json` to change the provider or model:
+Edit `config.json`:
 
 ```json
 {
@@ -187,40 +145,57 @@ Edit `config.json` to change the provider or model:
 }
 ```
 
-Fabiana supports a wide range of providers — Anthropic, OpenAI, Google Gemini, Groq, Mistral, Amazon Bedrock, xAI, and more. OpenRouter is the default because one API key covers them all, but you can switch to any provider directly if you prefer.
-
 **Popular choices:**
 
 | Provider | Model | Notes |
 |---|---|---|
 | `openrouter` | `anthropic/claude-sonnet-4-5` | Best quality via OpenRouter |
 | `openrouter` | `google/gemini-2.5-flash` | Fast and cheap |
-| `anthropic` | `claude-sonnet-4-6` | Direct Anthropic, slightly cheaper |
+| `anthropic` | `claude-sonnet-4-6` | Direct Anthropic |
 | `google` | `gemini-2.5-flash` | Direct Google |
 | `groq` | `llama-3.3-70b-versatile` | Very fast, generous free tier |
 
-See [docs/providers.md](docs/providers.md) for the full list of supported providers, model IDs, and the env var each one needs.
+See [docs/providers.md](docs/providers.md) for the full list.
 
 ---
 
-## Plugin Development
-
-See [docs/plugins.md](docs/plugins.md) for the full guide — file structure, the `ToolDefinition` interface, `plugin.json` manifest format, and how to publish and install plugins from GitHub.
-
----
-
-## Backup & Restore
+## Optional: Google Calendar
 
 ```bash
-# Create a backup
+npm install -g @mariozechner/gccli
+gccli accounts credentials ~/path/to/oauth-credentials.json
+gccli accounts add your@gmail.com
+```
+
+Then add `GOOGLE_CALENDAR_EMAIL=your@gmail.com` to `.env`. Now she'll actually know when you have that meeting you keep forgetting.
+
+---
+
+## Optional: Brave Search
+
+1. Create a free account at [api-dashboard.search.brave.com](https://api-dashboard.search.brave.com/register)
+2. Grab an API key and add `BRAVE_API_KEY=your_key` to `.env`
+
+---
+
+## Backup & restore
+
+```bash
+# Save everything
 fabiana backup
 # → fabiana-2026-03-14T09-51-08.tar.gz
 
-# Restore from backup
+# Bring it back
 fabiana restore fabiana-2026-03-14T09-51-08.tar.gz
 ```
 
-Your entire memory, diary, and conversation history — safely portable.
+Memory, diary, conversations — all of it, safely portable.
+
+---
+
+## Plugin development
+
+Plugins live in `plugins/` and are auto-discovered at startup. A plugin is just a TypeScript file that exports a tool definition. See [docs/plugins.md](docs/plugins.md) for the full guide.
 
 ---
 
