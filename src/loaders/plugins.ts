@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
+import { PLUGINS_DIR, paths } from '../paths.js';
 
 export interface PluginMetadata {
   name: string;
@@ -21,7 +22,7 @@ export class PluginLoader {
   private pluginsDir: string;
   private enabledPlugins: Set<string> | null = null;
 
-  constructor(pluginsDir: string = './plugins') {
+  constructor(pluginsDir: string = PLUGINS_DIR) {
     this.pluginsDir = path.resolve(pluginsDir);
   }
 
@@ -96,7 +97,7 @@ export class PluginLoader {
     return tools;
   }
 
-  async loadPluginConfig(configPath: string = '.fabiana/config/plugins.json'): Promise<void> {
+  async loadPluginConfig(configPath: string = paths.pluginsJson): Promise<void> {
     try {
       const content = await fs.readFile(configPath, 'utf-8');
       const config: PluginsConfig = JSON.parse(content);
@@ -119,7 +120,7 @@ export async function loadPlugins(pluginsDir?: string): Promise<ToolDefinition[]
   return loader.loadAll();
 }
 
-export async function loadPluginsConfig(configPath: string = '.fabiana/config/plugins.json'): Promise<PluginsConfig> {
+export async function loadPluginsConfig(configPath: string = paths.pluginsJson): Promise<PluginsConfig> {
   try {
     const content = await fs.readFile(configPath, 'utf-8');
     return JSON.parse(content);
@@ -128,7 +129,7 @@ export async function loadPluginsConfig(configPath: string = '.fabiana/config/pl
   }
 }
 
-export async function savePluginsConfig(config: PluginsConfig, configPath: string = '.fabiana/config/plugins.json'): Promise<void> {
+export async function savePluginsConfig(config: PluginsConfig, configPath: string = paths.pluginsJson): Promise<void> {
   await fs.mkdir(path.dirname(configPath), { recursive: true });
   await fs.writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
 }

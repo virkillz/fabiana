@@ -1,6 +1,7 @@
 import { Telegraf } from 'telegraf';
 import fs from 'fs/promises';
 import type { ChannelAdapter, IncomingMessage } from './types.js';
+import { paths } from '../paths.js';
 
 export class TelegramAdapter implements ChannelAdapter {
   readonly name = 'telegram';
@@ -78,6 +79,6 @@ export class TelegramAdapter implements ChannelAdapter {
     const today = new Date().toISOString().slice(0, 10);
     const timestamp = new Date().toISOString();
     const entry = `[${timestamp}] [${source}] ${role === 'user' ? '👤 You' : '🌸 Fabiana'}: ${text}\n`;
-    await fs.appendFile(`.fabiana/data/logs/conversation-${today}.log`, entry, 'utf-8').catch(() => {});
+    await fs.appendFile(paths.logs(`conversation-${today}.log`), entry, 'utf-8').catch(() => {});
   }
 }

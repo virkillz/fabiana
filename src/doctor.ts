@@ -1,6 +1,6 @@
-import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
+import { paths, PLUGINS_DIR, DATA_DIR } from './paths.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
@@ -48,7 +48,7 @@ async function checkEnvironment() {
   }
 
   try {
-    await fs.access('.env');
+    await fs.access(paths.envFile);
     pass('.env file found');
   } catch {
     advisory('.env file not found', 'env vars must be set via export or shell profile');
@@ -60,7 +60,7 @@ async function checkEnvironment() {
   let slackEnabled = false;
 
   try {
-    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
+    const raw = await fs.readFile(paths.configJson, 'utf-8');
     const cfg = JSON.parse(raw);
     telegramEnabled = cfg.channels?.telegram?.enabled ?? true;
     slackEnabled = cfg.channels?.slack?.enabled ?? false;
@@ -104,26 +104,26 @@ async function checkConfig() {
   section('Configuration');
 
   try {
-    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
+    const raw = await fs.readFile(paths.configJson, 'utf-8');
     const cfg = JSON.parse(raw);
-    pass('.fabiana/config/config.json', `model: ${cfg.model?.provider}/${cfg.model?.modelId}`);
+    pass(paths.configJson, `model: ${cfg.model?.provider}/${cfg.model?.modelId}`);
   } catch (e: any) {
-    error('.fabiana/config/config.json', 'not found — run `fabiana init` to set up');
+    error(paths.configJson, 'not found — run `fabiana init` to set up');
   }
 
   try {
-    const raw = await fs.readFile('.fabiana/config/manifest.json', 'utf-8');
+    const raw = await fs.readFile(paths.manifestJson, 'utf-8');
     JSON.parse(raw);
-    pass('.fabiana/config/manifest.json');
+    pass(paths.manifestJson);
   } catch (e: any) {
-    error('.fabiana/config/manifest.json', e.message);
+    error(paths.manifestJson, e.message);
   }
 
   for (const file of [
-    '.fabiana/config/system.md',
-    '.fabiana/config/system-chat.md',
-    '.fabiana/config/system-initiative.md',
-    '.fabiana/config/system-consolidate.md',
+    paths.systemMd(),
+    paths.systemMd('chat'),
+    paths.systemMd('initiative'),
+    paths.systemMd('consolidate'),
   ]) {
     try {
       const stat = await fs.stat(file);
@@ -139,7 +139,7 @@ async function checkPiSdk() {
 
   let modelId = 'unknown';
   try {
-    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
+    const raw = await fs.readFile(paths.configJson, 'utf-8');
     const cfg = JSON.parse(raw);
     modelId = `${cfg.model?.provider}/${cfg.model?.modelId}`;
     const model = getModel(cfg.model?.provider, cfg.model?.modelId);
@@ -202,7 +202,7 @@ async function checkExternalTools() {
 async function checkPlugins() {
   section('Plugins');
 
-  const pluginsConfigPath = '.fabiana/config/plugins.json';
+  const pluginsConfigPath = paths.pluginsJson;
   type PluginsConfig = Record<string, Record<string, unknown>>;
   let pluginsConfig: PluginsConfig = {};
   let hasConfig = false;
@@ -216,13 +216,13 @@ async function checkPlugins() {
   }
 
   try {
-    await fs.access('./plugins');
+    await fs.access(PLUGINS_DIR);
   } catch {
     advisory('No plugins/ directory found');
     return;
   }
 
-  const entries = await fs.readdir('./plugins', { withFileTypes: true });
+  const entries = await fs.readdir(PLUGINS_DIR, { withFileTypes: true });
   const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
 
   if (dirs.length === 0) {
@@ -234,8 +234,8 @@ async function checkPlugins() {
     const pluginCfg = pluginsConfig[dir];
     const isEnabled = !hasConfig || (pluginCfg !== undefined && pluginCfg.enabled !== false);
 
-    const tsPath = path.join('./plugins', dir, 'index.ts');
-    const jsPath = path.join('./plugins', dir, 'index.js');
+    const tsPath = path.join(PLUGINS_DIR, dir, 'index.ts');
+    const jsPath = path.join(PLUGINS_DIR, dir, 'index.js');
 
     let entryPath: string | null = null;
     for (const p of [tsPath, jsPath]) {
@@ -267,7 +267,7 @@ async function checkPlugins() {
       }
 
       // Check env vars declared in plugin.json
-      const manifestPath = path.join('./plugins', dir, 'plugin.json');
+      const manifestPath = path.join(PLUGINS_DIR, dir, 'plugin.json');
       try {
         const raw = await fs.readFile(manifestPath, 'utf-8');
         const manifest = JSON.parse(raw);
@@ -294,11 +294,11 @@ async function checkDataDirectories() {
   section('Data Directories');
 
   const required = [
-    '.fabiana/data/memory',
-    '.fabiana/data/agent-todo/pending',
-    '.fabiana/data/agent-todo/scheduled',
-    '.fabiana/data/agent-todo/completed',
-    '.fabiana/data/logs',
+    path.join(DATA_DIR, 'memory'),
+    path.join(DATA_DIR, 'agent-todo', 'pending'),
+    path.join(DATA_DIR, 'agent-todo', 'scheduled'),
+    path.join(DATA_DIR, 'agent-todo', 'completed'),
+    path.join(DATA_DIR, 'logs'),
   ];
 
   for (const dir of required) {

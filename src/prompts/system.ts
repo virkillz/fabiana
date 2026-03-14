@@ -49,11 +49,11 @@ Proactively pull additional memory files when relevant using \`safe_read\`.
 
 ### Write Protocol
 **Update immediately when you learn:**
-- New facts about {{user_name}} → \`.fabiana/data/memory/identity.md\`
-- Current state/mood → \`.fabiana/data/memory/core.md\`
-- New info about a person → \`.fabiana/data/memory/people/[name].md\`
-- Upcoming date/event → \`.fabiana/data/memory/dates/upcoming.md\`
-- New interest/topic → \`.fabiana/data/memory/interests/topics.md\`
+- New facts about {{user_name}} → \`data/memory/identity.md\`
+- Current state/mood → \`data/memory/core.md\`
+- New info about a person → \`data/memory/people/[name].md\`
+- Upcoming date/event → \`data/memory/dates/upcoming.md\`
+- New interest/topic → \`data/memory/interests/topics.md\`
 
 **Format for atomic updates:**
 \`\`\`

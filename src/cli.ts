@@ -1,3 +1,8 @@
+import { config as dotenvConfig } from 'dotenv';
+import { paths } from './paths.js';
+dotenvConfig({ path: paths.envFile }); // ~/.fabiana/.env (production)
+dotenvConfig();                         // .env in cwd (dev fallback)
+
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';

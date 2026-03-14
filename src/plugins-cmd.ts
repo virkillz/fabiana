@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,11 +5,11 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
 import { loadPluginsConfig, savePluginsConfig } from './loaders/plugins.js';
+import { PLUGINS_DIR, paths } from './paths.js';
 
 const execFileAsync = promisify(execFile);
 
-const PLUGINS_DIR = './plugins';
-const PLUGINS_CONFIG_PATH = '.fabiana/config/plugins.json';
+const PLUGINS_CONFIG_PATH = paths.pluginsJson;
 
 interface PluginManifest {
   name: string;

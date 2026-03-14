@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { ConversationState, CreateConversationOpts } from './types.js';
+import { paths } from '../paths.js';
 
-const DATA_DIR = '.fabiana/data/conversations';
+const DATA_DIR = paths.conversations;
 
 /** 4 days of inactivity → auto-expire */
 const EXPIRY_MS = 4 * 24 * 60 * 60 * 1000;

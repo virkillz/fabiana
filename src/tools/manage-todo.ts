@@ -3,8 +3,9 @@ import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
 import { PermissionValidator } from '../utils/permissions.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { paths } from '../paths.js';
 
-const TODO_DIR = '.fabiana/data/agent-todo';
+const TODO_DIR = paths.agentTodo;
 
 export function createManageTodoTool(validator: PermissionValidator): ToolDefinition {
   return {

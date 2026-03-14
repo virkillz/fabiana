@@ -7,7 +7,7 @@
     "fabiana": "bin/fabiana.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/build-plugins.js",
     "prepare": "npm run build",
     "dev": "tsx src/cli.ts start",
     "start": "tsx src/cli.ts start",

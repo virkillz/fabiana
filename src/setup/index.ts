@@ -1,9 +1,9 @@
 import { input, select, checkbox, confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 import fs from 'fs/promises';
-import os from 'os';
 import path from 'path';
 import { providers } from '../data/providers.js';
+import { paths, PLUGINS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR } from '../paths.js';
 import { systemPromptTemplate } from '../prompts/system.js';
 import { systemChatTemplate } from '../prompts/system-chat.js';
 import { systemInitiativeTemplate } from '../prompts/system-initiative.js';
@@ -239,17 +239,18 @@ export async function runSetup(): Promise<void> {
     tone_chat_guidance: tone.chatGuidance,
   };
 
-  await fs.mkdir('.fabiana/config', { recursive: true });
-  await fs.mkdir('.fabiana/data/memory/recent', { recursive: true });
-  await fs.mkdir('.fabiana/data/memory/people', { recursive: true });
-  await fs.mkdir('.fabiana/data/memory/dates', { recursive: true });
-  await fs.mkdir('.fabiana/data/memory/interests', { recursive: true });
-  await fs.mkdir('.fabiana/data/memory/diary', { recursive: true });
-  await fs.mkdir('.fabiana/data/agent-todo/pending', { recursive: true });
-  await fs.mkdir('.fabiana/data/agent-todo/scheduled', { recursive: true });
-  await fs.mkdir('.fabiana/data/agent-todo/completed', { recursive: true });
-  await fs.mkdir('.fabiana/data/logs', { recursive: true });
-  await fs.mkdir('.fabiana/data/sessions', { recursive: true });
+  await fs.mkdir(CONFIG_DIR, { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'memory', 'recent'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'memory', 'people'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'memory', 'dates'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'memory', 'interests'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'memory', 'diary'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'pending'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'scheduled'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'completed'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(DATA_DIR, 'sessions'), { recursive: true });
+  await fs.mkdir(PLUGINS_DIR, { recursive: true });
 
   // config
   const config = {
@@ -273,21 +274,21 @@ export async function runSetup(): Promise<void> {
     },
     memory: { consolidateAt: '00:00' },
   };
-  await fs.writeFile('.fabiana/config/config.json', JSON.stringify(config, null, 2));
-  ok('.fabiana/config/config.json');
+  await fs.writeFile(paths.configJson, JSON.stringify(config, null, 2));
+  ok(paths.configJson);
 
-  // manifest
+  // manifest — paths are relative to FABIANA_HOME (the PermissionValidator baseDir)
   const manifest = {
     version: '0.1.0',
     description: 'Fabiana permission manifest - controls what the agent can read/write',
     permissions: {
-      readonly: ['.fabiana/config/**', 'src/**', 'package.json', 'tsconfig.json'],
-      writable: ['.fabiana/data/memory/**', '.fabiana/data/agent-todo/**'],
-      appendonly: ['.fabiana/data/logs/**'],
+      readonly: ['config/**'],
+      writable: ['data/memory/**', 'data/agent-todo/**'],
+      appendonly: ['data/logs/**'],
     },
   };
-  await fs.writeFile('.fabiana/config/manifest.json', JSON.stringify(manifest, null, 2));
-  ok('.fabiana/config/manifest.json');
+  await fs.writeFile(paths.manifestJson, JSON.stringify(manifest, null, 2));
+  ok(paths.manifestJson);
 
   // plugins.json
   const pluginsConfig: Record<string, { enabled: boolean; [key: string]: unknown }> = {};
@@ -298,44 +299,60 @@ export async function runSetup(): Promise<void> {
     pluginsConfig['calendar'].lookAheadHours = 24;
     pluginsConfig['calendar'].meetingPrepMinutesBefore = 60;
   }
-  await fs.writeFile('.fabiana/config/plugins.json', JSON.stringify(pluginsConfig, null, 2));
-  ok('.fabiana/config/plugins.json');
+  await fs.writeFile(paths.pluginsJson, JSON.stringify(pluginsConfig, null, 2));
+  ok(paths.pluginsJson);
 
   // system prompts
-  await fs.writeFile('.fabiana/config/system.md', fillTemplate(systemPromptTemplate, templateVars));
-  ok('.fabiana/config/system.md');
-  await fs.writeFile('.fabiana/config/system-chat.md', fillTemplate(systemChatTemplate, templateVars));
-  ok('.fabiana/config/system-chat.md');
-  await fs.writeFile('.fabiana/config/system-initiative.md', fillTemplate(systemInitiativeTemplate, templateVars));
-  ok('.fabiana/config/system-initiative.md');
-  await fs.writeFile('.fabiana/config/system-consolidate.md', fillTemplate(systemConsolidateTemplate, templateVars));
-  ok('.fabiana/config/system-consolidate.md');
-  await fs.writeFile('.fabiana/config/system-external.md', fillTemplate(systemExternalTemplate, templateVars));
-  ok('.fabiana/config/system-external.md');
+  await fs.writeFile(paths.systemMd(), fillTemplate(systemPromptTemplate, templateVars));
+  ok(paths.systemMd());
+  await fs.writeFile(paths.systemMd('chat'), fillTemplate(systemChatTemplate, templateVars));
+  ok(paths.systemMd('chat'));
+  await fs.writeFile(paths.systemMd('initiative'), fillTemplate(systemInitiativeTemplate, templateVars));
+  ok(paths.systemMd('initiative'));
+  await fs.writeFile(paths.systemMd('consolidate'), fillTemplate(systemConsolidateTemplate, templateVars));
+  ok(paths.systemMd('consolidate'));
+  await fs.writeFile(paths.systemMd('external'), fillTemplate(systemExternalTemplate, templateVars));
+  ok(paths.systemMd('external'));
 
   // seed memory
   const today = new Date().toISOString().split('T')[0];
-  await fs.writeFile('.fabiana/data/memory/identity.md', `# Identity\n\n- [${today}] Name: ${userName}\n`);
+  await fs.writeFile(paths.memory('identity.md'), `# Identity\n\n- [${today}] Name: ${userName}\n`);
   await fs.writeFile(
-    '.fabiana/data/memory/core.md',
+    paths.memory('core.md'),
     `# Core State\n\nlast_message_sent: never\nactive_threads: []\nnotes: ${botName} initialized on ${today}\n`
   );
   await fs.writeFile(
-    '.fabiana/data/memory/recent/this-week.md',
+    paths.memory('recent', 'this-week.md'),
     `# This Week\n\n- [${today}] ${botName} initialized.\n`
   );
-  ok('.fabiana/data/memory/ (seeded)');
+  ok(`${DATA_DIR}/memory/ (seeded)`);
 
   // state — tracks first-run intro
   await fs.writeFile(
-    '.fabiana/config/state.json',
+    paths.stateJson,
     JSON.stringify({ introduced: false, userName, botName, toneKey }, null, 2)
   );
-  ok('.fabiana/config/state.json');
+  ok(paths.stateJson);
+
+  // copy bundled default plugins (skip any already installed)
+  try {
+    const bundledDirs = await fs.readdir(BUNDLED_PLUGINS_DIR, { withFileTypes: true });
+    for (const entry of bundledDirs.filter(e => e.isDirectory())) {
+      const dest = path.join(PLUGINS_DIR, entry.name);
+      try {
+        await fs.access(dest);
+        // already exists — skip so user customisations are preserved
+      } catch {
+        await fs.cp(path.join(BUNDLED_PLUGINS_DIR, entry.name), dest, { recursive: true });
+      }
+    }
+    ok(`${PLUGINS_DIR}/ (default plugins copied)`);
+  } catch {
+    // No bundled plugins dir — dev environment or stripped build, skip silently
+  }
 
   // ── API key setup ─────────────────────────────────────────────
-  const envPath = path.join(process.cwd(), '.env');
-  const homeDir = os.homedir();
+  const envPath = paths.envFile;
   const shell = process.env.SHELL ?? '';
   const rcFile = shell.includes('zsh') ? '~/.zshrc' : '~/.bashrc';
 
@@ -411,6 +428,6 @@ export async function runSetup(): Promise<void> {
   console.log(`\n  ${chalk.dim('Or run a single proactive check to test initiative mode:')}\n`);
   code('fabiana initiative');
 
-  console.log(`\n  ${chalk.dim(`Config lives at: .fabiana/config/`)}`);
-  console.log(`  ${chalk.dim('To customize the system prompt, edit: .fabiana/config/system.md')}\n`);
+  console.log(`\n  ${chalk.dim(`Config lives at: ${CONFIG_DIR}/`)}`);
+  console.log(`  ${chalk.dim(`To customize the system prompt, edit: ${paths.systemMd()}`)}\n`);
 }

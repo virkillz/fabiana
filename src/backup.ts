@@ -4,10 +4,9 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
 import readline from 'readline';
+import { DATA_DIR } from './paths.js';
 
 const execFileAsync = promisify(execFile);
-
-const DATA_DIR = '.fabiana/data';
 
 function makeFilename(): string {
   const now = new Date();
@@ -90,7 +89,7 @@ export async function runRestore(filepath: string, options: { force?: boolean })
   }
 
   try {
-    await execFileAsync('tar', ['-xzf', absPath]);
+    await execFileAsync('tar', ['-xzf', absPath, '-C', '/']);
     console.log(`\n${chalk.green('✓')} Data restored to ${chalk.cyan(DATA_DIR)}\n`);
   } catch (e: any) {
     console.error(chalk.red(`✗ Restore failed: ${e.message}`));

@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import {
   createAgentSession,
   AuthStorage,
@@ -20,6 +19,7 @@ import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
 import { loadContext, buildPrompt, type SessionMode } from '../loaders/context.js';
 import { loadPlugins } from '../loaders/plugins.js';
+import { paths, PLUGINS_DIR } from '../paths.js';
 
 interface Config {
   model: {
@@ -42,13 +42,12 @@ interface Config {
 }
 
 async function loadConfig(): Promise<Config> {
-  const configPath = '.fabiana/config/config.json';
   try {
-    const content = await fs.readFile(configPath, 'utf-8');
+    const content = await fs.readFile(paths.configJson, 'utf-8');
     return JSON.parse(content);
   } catch {
     throw new Error(
-      `Config not found at ${configPath}. Run 'fabiana init' to set up your companion.`
+      `Config not found at ${paths.configJson}. Run 'fabiana init' to set up your companion.`
     );
   }
 }
@@ -75,7 +74,7 @@ export async function runPiSession(
     console.log(`      Model: ${config.model.provider}/${config.model.modelId}`);
 
     console.log('[2/8] Loading permissions...');
-    const permissions = await PermissionValidator.load('.fabiana/config/manifest.json');
+    const permissions = await PermissionValidator.load(paths.manifestJson);
 
     console.log('[3/8] Initializing pi SDK...');
     const authStorage = AuthStorage.create();
@@ -89,17 +88,17 @@ export async function runPiSession(
     console.log('      ✓ Model loaded');
 
     console.log('[5/8] Loading system prompt...');
-    const baseSystemPrompt = await fs.readFile('.fabiana/config/system.md', 'utf-8');
+    const baseSystemPrompt = await fs.readFile(paths.systemMd(), 'utf-8');
     // Both external-outreach and external-reply share system-external.md
     const modeKey = mode.startsWith('external-') ? 'external' : mode;
-    const modeSystemPrompt = await fs.readFile(`.fabiana/config/system-${modeKey}.md`, 'utf-8').catch(() => '');
+    const modeSystemPrompt = await fs.readFile(paths.systemMd(modeKey), 'utf-8').catch(() => '');
     let systemPromptContent = modeSystemPrompt
       ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
       : baseSystemPrompt;
 
     // Inject owner name and conversation purpose into external system prompt
     if (mode.startsWith('external-')) {
-      const identity = await fs.readFile('.fabiana/data/memory/identity.md', 'utf-8').catch(() => '');
+      const identity = await fs.readFile(paths.memory('identity.md'), 'utf-8').catch(() => '');
       const ownerNameMatch = identity.match(/(?:my name is|I am|name:\s*)([A-Z][a-z]+)/i);
       const ownerName = ownerNameMatch ? ownerNameMatch[1] : 'the owner';
       systemPromptContent = systemPromptContent.replace('{owner_name}', ownerName);
@@ -135,7 +134,7 @@ export async function runPiSession(
       conversationManager,
     });
     const bashTool = toolset === 'full' ? createBashTool(process.cwd()) : null;
-    const pluginTools = toolset === 'full' ? await loadPlugins('./plugins') : [];
+    const pluginTools = toolset === 'full' ? await loadPlugins(PLUGINS_DIR) : [];
 
     console.log('[7/8] Creating agent session...');
     const { session } = await createAgentSession({
@@ -146,7 +145,7 @@ export async function runPiSession(
       modelRegistry,
       resourceLoader: loader,
       customTools: [...fabianaTools, ...(bashTool ? [bashTool] : []), ...pluginTools],
-      sessionManager: SessionManager.create(process.cwd(), '.fabiana/data/sessions'),
+      sessionManager: SessionManager.create(process.cwd(), paths.sessions),
     });
     console.log('      ✓ Session created');
 
@@ -207,7 +206,7 @@ export async function runPiSession(
     if (mode === 'initiative' && !sendMessageCalled && accumulatedResponse.trim()) {
       const timestamp = new Date().toISOString();
       const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
-      await fs.appendFile('.fabiana/data/logs/initiative-silence.log', entry, 'utf-8');
+      await fs.appendFile(paths.logs('initiative-silence.log'), entry, 'utf-8');
     }
 
     console.log('\n━'.repeat(50));
@@ -284,7 +283,7 @@ function pickStartupMessage(toneKey: string): string {
 }
 
 async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void> {
-  const statePath = '.fabiana/config/state.json';
+  const statePath = paths.stateJson;
   let state: { introduced: boolean; userName: string; botName: string; toneKey: string };
 
   try {
@@ -321,7 +320,7 @@ async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void>
         modelRegistry,
         resourceLoader: loader,
         customTools: [],
-        sessionManager: SessionManager.create(process.cwd(), '.fabiana/data/sessions'),
+        sessionManager: SessionManager.create(process.cwd(), paths.sessions),
       });
 
       let introText = '';

@@ -1,5 +1,6 @@
 import { Telegraf } from 'telegraf';
 import fs from 'fs/promises';
+import { paths } from '../paths.js';
 
 export interface IncomingMessage {
   text: string;
@@ -85,6 +86,6 @@ export class TelegramPoller {
     const today = new Date().toISOString().slice(0, 10);
     const timestamp = new Date().toISOString();
     const entry = `[${timestamp}] ${role === 'user' ? '👤 You' : '🌸 Fabiana'}: ${text}\n`;
-    await fs.appendFile(`.fabiana/data/logs/conversation-${today}.log`, entry, 'utf-8').catch(() => {});
+    await fs.appendFile(paths.logs(`conversation-${today}.log`), entry, 'utf-8').catch(() => {});
   }
 }

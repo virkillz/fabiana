@@ -23,7 +23,8 @@ export class PermissionValidator {
   static async load(manifestPath: string): Promise<PermissionValidator> {
     const content = await fs.readFile(manifestPath, 'utf-8');
     const manifest = JSON.parse(content) as PermissionManifest;
-    return new PermissionValidator(manifest, process.cwd());
+    const { FABIANA_HOME } = await import('../paths.js');
+    return new PermissionValidator(manifest, FABIANA_HOME);
   }
 
   private normalizePath(filePath: string): string {
