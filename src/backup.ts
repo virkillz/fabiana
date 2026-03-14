@@ -4,7 +4,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import chalk from 'chalk';
 import readline from 'readline';
-import { DATA_DIR } from './paths.js';
+import { DATA_DIR, FABIANA_HOME } from './paths.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -41,7 +41,7 @@ export async function runBackup(options: { output?: string }): Promise<void> {
   console.log(chalk.dim(`  Output: ${outPath}`));
 
   try {
-    await execFileAsync('tar', ['-czf', outPath, DATA_DIR]);
+    await execFileAsync('tar', ['-czf', outPath, '-C', FABIANA_HOME, 'data']);
     const stat = await fs.stat(outPath);
     const kb = (stat.size / 1024).toFixed(1);
     console.log(`\n${chalk.green('✓')} Backup saved: ${chalk.cyan(path.basename(outPath))} ${chalk.dim(`(${kb} KB)`)}\n`);
@@ -89,7 +89,8 @@ export async function runRestore(filepath: string, options: { force?: boolean })
   }
 
   try {
-    await execFileAsync('tar', ['-xzf', absPath, '-C', '/']);
+    await fs.mkdir(FABIANA_HOME, { recursive: true });
+    await execFileAsync('tar', ['-xzf', absPath, '-C', FABIANA_HOME]);
     console.log(`\n${chalk.green('✓')} Data restored to ${chalk.cyan(DATA_DIR)}\n`);
   } catch (e: any) {
     console.error(chalk.red(`✗ Restore failed: ${e.message}`));

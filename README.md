@@ -3,17 +3,17 @@
 </p>
 
 <h1 align="center">Fabiana</h1>
-<p align="center"><em>she texts first.</em></p>
+<p align="center"><em>Your personal AI companion that actually feels personal</em></p>
 
 ---
 
 ## The pitch
 
-Every other AI assistant sits there, waiting, blinking, and answer to you like an overpolite receptionist with fake smiles. Fabiana doesn't wait. She has places to be, things she noticed, a story she thought you'd find interesting. She'll message you before you even open the app.
+Every other AI assistant sits there, waiting for your command, answering like an overly polite receptionist with a forced smile. Fabiana doesn’t wait. She texts you first, asks about your day, and remembers your habits. She has things on her mind, patterns she noticed, stories she thinks you’d enjoy. 
 
-She's not an assistant. She's a companion. One who remembers your sister's name, knows you hate meetings before 10am, and will roast you (gently) if you said you'd go to bed early and you're still up at 1am asking her about the news.
+Fabiana is not your typical obedient worker. She's independent, proactive, and has her own agenda. She's not an assistant who you tried to befriends with. She's a friend who slowly learn to help you with your tasks. The kind who remembers your sister’s name, knows you refuse to schedule meetings before 10am, and will roast you—gently—when you promised to sleep early but it’s 1am and you’re asking her about world news again.
 
-No dashboards. No commands to remember. She slides into your DM.
+No dashboards. No commands to memorize. She just slides into your DM.
 
 ---
 
