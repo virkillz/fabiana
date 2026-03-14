@@ -29,6 +29,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
     "@mariozechner/pi-ai": "latest",
     "@mariozechner/pi-coding-agent": "latest",
     "@mozilla/readability": "^0.6.0",

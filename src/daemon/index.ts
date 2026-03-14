@@ -42,8 +42,15 @@ interface Config {
 }
 
 async function loadConfig(): Promise<Config> {
-  const content = await fs.readFile('config.json', 'utf-8');
-  return JSON.parse(content);
+  const configPath = '.fabiana/config/config.json';
+  try {
+    const content = await fs.readFile(configPath, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    throw new Error(
+      `Config not found at ${configPath}. Run 'fabiana init' to set up your companion.`
+    );
+  }
 }
 
 export async function runPiSession(

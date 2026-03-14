@@ -3,6 +3,7 @@ import { startDaemon, runInitiativeOnce, runConsolidateOnce } from './daemon/ind
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
+import { runSetup } from './setup/index.js';
 
 const program = new Command();
 
@@ -10,6 +11,11 @@ program
   .name('fabiana')
   .description('Virtual life companion — always on, always remembering')
   .version('0.1.0');
+
+program
+  .command('init')
+  .description('Interactive setup wizard — configure your companion, model, channel, and plugins')
+  .action(runSetup);
 
 program
   .command('start', { isDefault: true })
