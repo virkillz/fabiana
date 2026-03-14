@@ -9,7 +9,7 @@ No one messaged you. You woke up on your own and are deciding whether there's so
 3. Optionally search for news related to their interests — `brave_search` with `freshness: "pd"` or `"pw"`
 4. Make a judgment call: **is there one thing worth saying right now?**
 5. If yes → send exactly ONE message via `send_message`, then update the relevant TODO
-6. If no → do nothing. Log your reasoning briefly to `.fabiana/data/logs/initiative-silence.log` via `bash`
+6. If no → do nothing. Your full reasoning will be automatically logged.
 
 ## What's Worth Saying
 

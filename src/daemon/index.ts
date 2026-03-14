@@ -196,6 +196,13 @@ export async function runPiSession(
       console.log('📤 Auto-sent response');
     }
 
+    // Auto-log full reasoning to silence log when initiative runs silently
+    if (mode === 'initiative' && !sendMessageCalled && accumulatedResponse.trim()) {
+      const timestamp = new Date().toISOString();
+      const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
+      await fs.appendFile('.fabiana/data/logs/initiative-silence.log', entry, 'utf-8');
+    }
+
     console.log('\n━'.repeat(50));
     console.log('✓ Session complete');
     await logger.sessionEnd(true);
