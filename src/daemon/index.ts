@@ -11,7 +11,10 @@ import {
 import { getModel } from '@mariozechner/pi-ai';
 import fs from 'fs/promises';
 import cron from 'node-cron';
-import { TelegramPoller } from '../telegram/poller.js';
+import { loadChannels, type ChannelsConfig } from '../channels/index.js';
+import type { ChannelAdapter, IncomingMessage } from '../channels/types.js';
+import { ConversationManager } from '../conversations/manager.js';
+import type { ConversationState } from '../conversations/types.js';
 import { PermissionValidator } from '../utils/permissions.js';
 import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
@@ -28,9 +31,7 @@ interface Config {
     maxCostPerSession: number;
     maxSessionDuration: number;
   };
-  telegram: {
-    polling: { interval: number; timeout: number };
-  };
+  channels?: ChannelsConfig;
   initiative: {
     enabled: boolean;
     minHoursBetweenMessages: number;
@@ -48,7 +49,11 @@ async function loadConfig(): Promise<Config> {
 export async function runPiSession(
   mode: SessionMode,
   incomingMessage?: string,
-  telegramPoller?: TelegramPoller
+  channel?: ChannelAdapter,
+  incomingMsg?: IncomingMessage,
+  conversationState?: ConversationState,
+  allChannels?: ChannelAdapter[],
+  conversationManager?: ConversationManager
 ): Promise<void> {
   const logger = Logger.create();
   const sessionStartTime = Date.now();
@@ -78,28 +83,52 @@ export async function runPiSession(
 
     console.log('[5/8] Loading system prompt...');
     const baseSystemPrompt = await fs.readFile('.fabiana/config/system.md', 'utf-8');
-    const modeSystemPrompt = await fs.readFile(`.fabiana/config/system-${mode}.md`, 'utf-8').catch(() => '');
-    const systemPromptContent = modeSystemPrompt
+    // Both external-outreach and external-reply share system-external.md
+    const modeKey = mode.startsWith('external-') ? 'external' : mode;
+    const modeSystemPrompt = await fs.readFile(`.fabiana/config/system-${modeKey}.md`, 'utf-8').catch(() => '');
+    let systemPromptContent = modeSystemPrompt
       ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
       : baseSystemPrompt;
+
+    // Inject owner name and conversation purpose into external system prompt
+    if (mode.startsWith('external-')) {
+      const identity = await fs.readFile('.fabiana/data/memory/identity.md', 'utf-8').catch(() => '');
+      const ownerNameMatch = identity.match(/(?:my name is|I am|name:\s*)([A-Z][a-z]+)/i);
+      const ownerName = ownerNameMatch ? ownerNameMatch[1] : 'the owner';
+      systemPromptContent = systemPromptContent.replace('{owner_name}', ownerName);
+      if (conversationState) {
+        systemPromptContent = systemPromptContent.replace('{purpose}', conversationState.purpose);
+      }
+    }
+
     const loader = new DefaultResourceLoader({
       cwd: process.cwd(),
       systemPromptOverride: () => systemPromptContent,
     });
     await loader.reload();
 
-    const sendTelegram = async (text: string) => {
-      console.log(`      📤 Sending Telegram: "${text.slice(0, 40)}..."`);
-      if (telegramPoller) {
-        await telegramPoller.send(text);
-        await telegramPoller.logConversation('fabiana', text);
+    const isExternalSession = mode === 'external-outreach' || mode === 'external-reply';
+    const toolset = isExternalSession ? 'external' : 'full';
+
+    const sendMessage = async (text: string) => {
+      console.log(`      📤 Sending [${channel?.name ?? 'no-channel'}]: "${text.slice(0, 40)}..."`);
+      if (channel) {
+        await channel.send(text, incomingMsg?.channelId, incomingMsg?.threadId);
+        await channel.logConversation('fabiana', text, incomingMsg?.source ?? channel.name);
+      }
+      if (conversationState && conversationManager) {
+        await conversationManager.append(conversationState.id, 'fabiana', text);
       }
     };
 
     console.log('[6/8] Creating tools...');
-    const fabianaTools = createFabianaTools(permissions, sendTelegram);
-    const bashTool = createBashTool(process.cwd());
-    const pluginTools = await loadPlugins('./plugins');
+    const fabianaTools = createFabianaTools(permissions, sendMessage, {
+      toolset,
+      channels: allChannels,
+      conversationManager,
+    });
+    const bashTool = toolset === 'full' ? createBashTool(process.cwd()) : null;
+    const pluginTools = toolset === 'full' ? await loadPlugins('./plugins') : [];
 
     console.log('[7/8] Creating agent session...');
     const { session } = await createAgentSession({
@@ -109,14 +138,14 @@ export async function runPiSession(
       authStorage,
       modelRegistry,
       resourceLoader: loader,
-      customTools: [...fabianaTools, bashTool, ...pluginTools],
+      customTools: [...fabianaTools, ...(bashTool ? [bashTool] : []), ...pluginTools],
       sessionManager: SessionManager.create(process.cwd(), '.fabiana/data/sessions'),
     });
     console.log('      ✓ Session created');
 
     console.log('[8/8] Setting up event handlers...');
 
-    let sendTelegramCalled = false;
+    let sendMessageCalled = false;
     let accumulatedResponse = '';
 
     session.subscribe(async (event: AgentSessionEvent) => {
@@ -130,8 +159,8 @@ export async function runPiSession(
       if (event.type === 'tool_execution_start') {
         console.log(`\n🔧 Tool: ${event.toolName}`);
         await logger.log(`Tool: ${event.toolName}`);
-        if (event.toolName === 'send_telegram') {
-          sendTelegramCalled = true;
+        if (event.toolName === 'send_message') {
+          sendMessageCalled = true;
         }
       }
       if (event.type === 'tool_execution_end') {
@@ -148,7 +177,7 @@ export async function runPiSession(
     });
 
     console.log('\n📚 Loading context...');
-    const context = await loadContext(mode, incomingMessage);
+    const context = await loadContext(mode, incomingMessage, conversationState);
     const prompt = buildPrompt(context);
     console.log(`      Context loaded: ${prompt.length} chars`);
 
@@ -158,12 +187,13 @@ export async function runPiSession(
     console.log('\n⏳ Waiting for agent to complete...');
     await session.agent.waitForIdle();
 
-    if (mode === 'chat' && telegramPoller && !sendTelegramCalled && accumulatedResponse.trim()) {
-      console.log('\n⚠️  Agent did not call send_telegram - auto-sending accumulated response');
+    // Auto-send fallback: chat mode only, if agent didn't call send_message
+    if (mode === 'chat' && channel && !sendMessageCalled && accumulatedResponse.trim()) {
+      console.log('\n⚠️  Agent did not call send_message - auto-sending accumulated response');
       const cleanResponse = accumulatedResponse.trim();
-      await telegramPoller.send(cleanResponse);
-      await telegramPoller.logConversation('fabiana', cleanResponse);
-      console.log('📤 Auto-sent response to Telegram');
+      await channel.send(cleanResponse, incomingMsg?.channelId, incomingMsg?.threadId);
+      await channel.logConversation('fabiana', cleanResponse, incomingMsg?.source ?? channel.name);
+      console.log('📤 Auto-sent response');
     }
 
     console.log('\n━'.repeat(50));
@@ -185,19 +215,12 @@ export async function startDaemon(): Promise<void> {
   console.log('━'.repeat(50));
 
   const config = await loadConfig();
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  const conversationManager = new ConversationManager();
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID
-    ? parseInt(process.env.TELEGRAM_CHAT_ID)
-    : undefined;
-
-  if (!token || !chatId) {
-    console.error('❌ TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required');
-    process.exit(1);
+  for (const ch of channels) {
+    await ch.start();
   }
-
-  const poller = new TelegramPoller(token, chatId);
-  await poller.start();
 
   const initiative = config.initiative;
   if (initiative.enabled) {
@@ -216,7 +239,7 @@ export async function startDaemon(): Promise<void> {
       }
       console.log('\n🌱 [SCHEDULED] Running initiative check...');
       try {
-        await runPiSession('initiative', undefined, poller);
+        await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
         console.log('✅ [SCHEDULED] Initiative complete');
       } catch (err: any) {
         console.error('❌ [SCHEDULED] Initiative failed:', err.message);
@@ -227,33 +250,70 @@ export async function startDaemon(): Promise<void> {
   cron.schedule('0 0 * * *', async () => {
     console.log('\n🌙 [SCHEDULED] Running midnight consolidation...');
     try {
-      await runPiSession('consolidate', undefined, poller);
+      await runPiSession('consolidate', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
       console.log('✅ [SCHEDULED] Consolidation complete');
     } catch (err: any) {
       console.error('❌ [SCHEDULED] Consolidation failed:', err.message);
     }
   });
 
+  // Hourly check: expire stale external conversations (> 4 days inactive)
+  cron.schedule('0 * * * *', async () => {
+    const expired = await conversationManager.expireStale();
+    for (const conv of expired) {
+      console.log(`\n⏳ External conversation expired: ${conv.id}`);
+      await primaryChannel.send(
+        `My conversation with **${conv.externalDisplayName}** about "${conv.purpose}" has gone quiet for 4 days. Want me to follow up?`
+      );
+    }
+  });
+
   console.log('👂 Listening for messages...');
   console.log(`🌱 Initiative: every ${config.initiative.checkIntervalMinutes}min (${config.initiative.activeHoursStart}:00–${config.initiative.activeHoursEnd}:00)`);
   console.log('🌙 Consolidation: midnight daily');
+  console.log(`📡 Active channels: ${channels.map((c) => c.name).join(', ')} (primary: ${primaryChannel.name})`);
   console.log('Press Ctrl+C to stop\n');
 
   const processLoop = async () => {
     let tickCount = 0;
     while (true) {
-      const messages = poller.drainQueue();
-      if (messages.length > 0) {
-        for (const msg of messages) {
-          console.log(`\n📨 Message: "${msg.text.slice(0, 50)}..."`);
-          await poller.logConversation('user', msg.text);
+      // Drain all channels and merge messages by timestamp
+      const allMessages = channels
+        .flatMap((c) => c.drainQueue())
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+      for (const msg of allMessages) {
+        const msgChannel = channels.find((c) => c.name === msg.source)!;
+
+        if (!msgChannel.isOwner(msg.senderId)) {
+          // Non-owner message — look up an active external conversation
+          const conv = await conversationManager.find(msg.source, msg.senderId, msg.threadId ?? '');
+          if (!conv) {
+            console.log(`\n⚠️  Unknown external message from ${msg.senderId} on ${msg.source}`);
+            await primaryChannel.send(
+              `📬 Unknown message from \`${msg.senderId}\` on ${msg.source}:\n> ${msg.text.slice(0, 200)}\n\nNo active conversation found. Use \`start_external_conversation\` if you want to engage.`
+            );
+            continue;
+          }
+          console.log(`\n📨 [${msg.source}] External reply from ${conv.externalDisplayName}: "${msg.text.slice(0, 50)}..."`);
+          await conversationManager.append(conv.id, conv.externalDisplayName, msg.text);
           try {
-            await runPiSession('chat', msg.text, poller);
+            await runPiSession('external-reply', msg.text, msgChannel, msg, conv, channels, conversationManager);
+          } catch (err: any) {
+            console.error('   ❌ External reply session error:', err.message);
+          }
+        } else {
+          // Owner message — full chat session on the channel it arrived on
+          console.log(`\n📨 [${msg.source}] Message: "${msg.text.slice(0, 50)}..."`);
+          await msgChannel.logConversation('user', msg.text, msg.source);
+          try {
+            await runPiSession('chat', msg.text, msgChannel, msg, undefined, channels, conversationManager);
           } catch (err: any) {
             console.error('   ❌ Session error:', err.message);
           }
         }
       }
+
       tickCount++;
       if (tickCount % 10 === 0) process.stdout.write('·');
       await new Promise((r) => setTimeout(r, 1000));
@@ -264,7 +324,9 @@ export async function startDaemon(): Promise<void> {
 
   process.on('SIGINT', async () => {
     console.log('\n\n👋 Shutting down...');
-    await poller.stop();
+    for (const ch of channels) {
+      await ch.stop();
+    }
     process.exit(0);
   });
 }
@@ -273,24 +335,24 @@ export async function runInitiativeOnce(): Promise<void> {
   console.log('\n🌸 Fabiana - Initiative check');
   console.log('━'.repeat(50));
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID
-    ? parseInt(process.env.TELEGRAM_CHAT_ID)
-    : undefined;
-
-  if (!token || !chatId) {
-    console.error('❌ TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required');
-    process.exit(1);
-  }
-
-  const poller = new TelegramPoller(token, chatId);
-  await runPiSession('initiative', undefined, poller);
+  const config = await loadConfig();
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  for (const ch of channels) await ch.start();
+  const conversationManager = new ConversationManager();
+  await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+  for (const ch of channels) await ch.stop();
   process.exit(0);
 }
 
 export async function runConsolidateOnce(): Promise<void> {
   console.log('\n🌸 Fabiana - Memory consolidation');
   console.log('━'.repeat(50));
-  await runPiSession('consolidate');
+
+  const config = await loadConfig();
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  for (const ch of channels) await ch.start();
+  const conversationManager = new ConversationManager();
+  await runPiSession('consolidate', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+  for (const ch of channels) await ch.stop();
   process.exit(0);
 }

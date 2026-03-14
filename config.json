@@ -9,10 +9,14 @@
     "maxCostPerSession": 1.00,
     "maxSessionDuration": 180
   },
-  "telegram": {
-    "polling": {
-      "interval": 3000,
-      "timeout": 30
+  "channels": {
+    "primary": "telegram",
+    "telegram": {
+      "enabled": true
+    },
+    "slack": {
+      "enabled": false,
+      "ownerUserId": ""
     }
   },
   "initiative": {

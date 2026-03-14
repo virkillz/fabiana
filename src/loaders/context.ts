@@ -1,6 +1,13 @@
 import fs from 'fs/promises';
+import type { ConversationState } from '../conversations/types.js';
 
-export type SessionMode = 'chat' | 'initiative' | 'consolidate' | 'daemon';
+export type SessionMode =
+  | 'chat'
+  | 'initiative'
+  | 'consolidate'
+  | 'daemon'
+  | 'external-outreach'
+  | 'external-reply';
 
 export interface FabianaContext {
   mode: SessionMode;
@@ -9,11 +16,13 @@ export interface FabianaContext {
   recentMemory: string;
   incomingMessage?: string;
   timestamp: string;
+  conversationState?: ConversationState;
 }
 
 export async function loadContext(
   mode: SessionMode,
-  incomingMessage?: string
+  incomingMessage?: string,
+  conversationState?: ConversationState
 ): Promise<FabianaContext> {
   const timestamp = new Date().toISOString();
 
@@ -21,7 +30,7 @@ export async function loadContext(
   const core = await readFile('.fabiana/data/memory/core.md', '(No core memory yet)');
   const recentMemory = await readFile('.fabiana/data/memory/recent/this-week.md', '(No recent memory yet)');
 
-  return { mode, identity, core, recentMemory, incomingMessage, timestamp };
+  return { mode, identity, core, recentMemory, incomingMessage, timestamp, conversationState };
 }
 
 async function readFile(filePath: string, fallback: string): Promise<string> {
@@ -57,6 +66,36 @@ ${ctx.recentMemory}`;
 ## 💬 Incoming Message
 
 > ${ctx.incomingMessage}`;
+  }
+
+  if (ctx.mode === 'external-reply' && ctx.conversationState && ctx.incomingMessage) {
+    return `${base}
+
+---
+
+## 🗣️ External Conversation
+
+**ID**: ${ctx.conversationState.id}
+**With**: ${ctx.conversationState.externalDisplayName} (${ctx.conversationState.externalUserId})
+**Purpose**: ${ctx.conversationState.purpose}
+**Channel**: ${ctx.conversationState.channel}
+
+### Incoming Message
+
+> ${ctx.incomingMessage}`;
+  }
+
+  if (ctx.mode === 'external-outreach' && ctx.conversationState) {
+    return `${base}
+
+---
+
+## 🗣️ External Conversation Context
+
+**ID**: ${ctx.conversationState.id}
+**With**: ${ctx.conversationState.externalDisplayName} (${ctx.conversationState.externalUserId})
+**Purpose**: ${ctx.conversationState.purpose}
+**Channel**: ${ctx.conversationState.channel}`;
   }
 
   return base;
