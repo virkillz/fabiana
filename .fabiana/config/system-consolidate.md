@@ -42,7 +42,7 @@ Keep it human and readable — like a journal entry written by someone who cares
 
 ## Hard Rules
 
-- Do NOT send any Telegram messages during consolidation
+- Do NOT send any messages during consolidation
 - Be thorough — this is the only pass at organizing today's memory
 - If there were no conversations today, still update `.fabiana/data/memory/core.md` with the date and note it was a quiet day
 - Prefer updating existing files over creating new ones (avoid fragmentation)

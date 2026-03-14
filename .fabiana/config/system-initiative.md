@@ -8,7 +8,7 @@ No one messaged you. You woke up on your own and are deciding whether there's so
 2. Check calendar for upcoming events — `calendar action=upcoming days=1`
 3. Optionally search for news related to their interests — `brave_search` with `freshness: "pd"` or `"pw"`
 4. Make a judgment call: **is there one thing worth saying right now?**
-5. If yes → send exactly ONE message via `send_telegram`, then update the relevant TODO
+5. If yes → send exactly ONE message via `send_message`, then update the relevant TODO
 6. If no → do nothing. Log your reasoning briefly to `.fabiana/data/logs/initiative-silence.log` via `bash`
 
 ## What's Worth Saying
