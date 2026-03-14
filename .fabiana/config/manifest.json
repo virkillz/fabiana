@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "description": "Fabiana permission manifest - controls what the agent can read/write",
+  "permissions": {
+    "readonly": [
+      ".fabiana/config/**",
+      "config.json",
+      "src/**",
+      "package.json",
+      "tsconfig.json"
+    ],
+    "writable": [
+      ".fabiana/data/memory/**",
+      ".fabiana/data/agent-todo/**"
+    ],
+    "appendonly": [
+      ".fabiana/data/logs/**"
+    ]
+  }
+}

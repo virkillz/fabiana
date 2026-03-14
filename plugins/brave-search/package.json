@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-brave-search",
+  "version": "1.0.0",
+  "description": "Web search via Brave Search API for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}

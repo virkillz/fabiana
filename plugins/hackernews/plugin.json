@@ -1,0 +1,9 @@
+{
+  "name": "hackernews",
+  "version": "1.0.0",
+  "description": "Hacker News top stories and discussions",
+  "env": [],
+  "config": {
+    "enabled": true
+  }
+}

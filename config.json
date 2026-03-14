@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "model": {
+    "provider": "openrouter",
+    "modelId": "moonshotai/kimi-k2.5",
+    "thinkingLevel": "low"
+  },
+  "limits": {
+    "maxCostPerSession": 1.00,
+    "maxSessionDuration": 180
+  },
+  "telegram": {
+    "polling": {
+      "interval": 3000,
+      "timeout": 30
+    }
+  },
+  "initiative": {
+    "enabled": true,
+    "minHoursBetweenMessages": 4,
+    "activeHoursStart": 9,
+    "activeHoursEnd": 22,
+    "checkIntervalMinutes": 30
+  },
+  "memory": {
+    "consolidateAt": "00:00",
+    "morningBriefAt": "09:00"
+  }
+}

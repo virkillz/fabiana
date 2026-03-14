@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-calendar",
+  "version": "1.0.0",
+  "description": "Google Calendar integration via gccli for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "brave-search",
+  "version": "1.0.0",
+  "description": "Web search via Brave Search API",
+  "env": [
+    { "key": "BRAVE_API_KEY", "required": true, "description": "API key from https://brave.com/search/api/" }
+  ],
+  "config": {
+    "enabled": true
+  }
+}

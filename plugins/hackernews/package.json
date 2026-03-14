@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-hackernews",
+  "version": "1.0.0",
+  "description": "Hacker News top stories plugin for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}

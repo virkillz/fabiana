@@ -1,0 +1,13 @@
+{
+  "calendar": {
+    "enabled": true,
+    "lookAheadHours": 24,
+    "meetingPrepMinutesBefore": 60
+  },
+  "hackernews": {
+    "enabled": true
+  },
+  "brave-search": {
+    "enabled": true
+  }
+}

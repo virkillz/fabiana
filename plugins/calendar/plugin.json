@@ -1,0 +1,13 @@
+{
+  "name": "calendar",
+  "version": "1.0.0",
+  "description": "Google Calendar integration via gccli",
+  "env": [
+    { "key": "GOOGLE_CALENDAR_EMAIL", "required": false, "description": "Google account email (defaults to 'primary')" }
+  ],
+  "config": {
+    "enabled": true,
+    "lookAheadHours": 24,
+    "meetingPrepMinutesBefore": 60
+  }
+}
