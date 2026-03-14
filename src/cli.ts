@@ -7,6 +7,7 @@ import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
+import { spawnSync } from 'child_process';
 import { startDaemon, runInitiativeOnce, runConsolidateOnce } from './daemon/index.js';
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
@@ -51,7 +52,7 @@ program
   .action(runSetup);
 
 program
-  .command('start', { isDefault: true })
+  .command('start')
   .description('Wake her up — she\'ll take it from there')
   .action(startDaemon);
 
@@ -64,6 +65,14 @@ program
   .command('consolidate')
   .description('Tidy up the mind palace')
   .action(runConsolidateOnce);
+
+program
+  .command('config')
+  .description('Tweak her settings (opens config.json in your editor)')
+  .action(() => {
+    const editor = process.env.EDITOR ?? process.env.VISUAL ?? 'vi';
+    spawnSync(editor, [paths.configJson], { stdio: 'inherit' });
+  });
 
 program
   .command('doctor')
@@ -101,5 +110,9 @@ program.addHelpCommand(
     .argument('[command]', 'command to show help for')
     .description('Show help for fabiana or a specific command')
 );
+
+if (process.argv.length === 2) {
+  program.help();
+}
 
 program.parse();

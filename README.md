@@ -64,28 +64,31 @@ Memory is tiered — hot files load every session, warm files load when relevant
 ### What you need
 
 - **Node.js ≥ 22**
-- A **Telegram bot** — takes 2 minutes via [@BotFather](https://t.me/BotFather)
 - An LLM API key — [OpenRouter](https://openrouter.ai/keys) is the easiest starting point (one key, 240+ models)
+- A **Telegram** or **Slack** account to chat with her
 
 ### Setup
 
 ```bash
-git clone https://github.com/your-username/fabiana
-cd fabiana
-npm install
+npm i -g fabiana
 fabiana init
 ```
 
-`fabiana init` walks you through the whole setup. Or do it manually:
+That's it. `fabiana init` walks you through everything — her name, personality, preferred tone, which provider and model to use, and which messaging app to connect. At the end, it tells you exactly which credentials to set.
 
-Create a `.env` file:
+Add those to your environment variables (or put them in `~/.fabiana/.env`):
 
 ```env
-TELEGRAM_BOT_TOKEN=your_token_from_botfather
-TELEGRAM_CHAT_ID=your_chat_id
+# Messaging — whichever you chose during init
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+# or
+SLACK_BOT_TOKEN=...
+SLACK_APP_TOKEN=...
+SLACK_CHANNEL_ID=...
 
-# Pick one (or more)
-OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (recommended — covers everything)
+# LLM — whichever provider you picked
+OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (recommended — covers 240+ models)
 ANTHROPIC_API_KEY=...             # Direct Anthropic
 OPENAI_API_KEY=...                # Direct OpenAI
 GEMINI_API_KEY=...                # Direct Google
@@ -95,23 +98,19 @@ BRAVE_API_KEY=...                 # Web search
 GOOGLE_CALENDAR_EMAIL=your@gmail.com  # Calendar awareness
 ```
 
-**Getting your Telegram credentials:**
-1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token
-2. Message [@userinfobot](https://t.me/userinfobot) → copy your numeric ID
-
 ### Check everything's wired up
 
 ```bash
 fabiana doctor
 ```
 
-Verifies your environment, credentials, plugins, and data directories. Fix anything it flags, then:
+Verifies your credentials, plugins, and data directories. Fix anything it flags, then:
 
 ```bash
 fabiana start
 ```
 
-She'll start listening on Telegram and schedule herself from there.
+Open Telegram (or Slack, depending on your setup) — she'll reach out first.
 
 ---
 
