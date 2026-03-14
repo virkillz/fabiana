@@ -27,7 +27,7 @@ No dashboards. No commands to remember. Just Telegram.
 
 **She's extensible.** Drop a plugin into `plugins/` and she gains a new capability at next startup. 
 
-**She's simple enough to trust.** The codebase is intentionally small. There's no build step. TypeScript runs directly via `tsx`. You can read the whole thing in an afternoon. Or ask LLM to explain it to you.
+**She's simple enough to trust.** The codebase is intentionally small. TypeScript, a handful of dependencies, plain text files. You can read the whole thing in an afternoon. Or ask an LLM to explain it to you.
 
 ---
 
@@ -41,7 +41,7 @@ Fabiana runs as a background daemon and does three things on a loop:
 | **Initiative** | Checks her TODO list and calendar, decides if there's something worth telling you |
 | **Consolidation** | Every night at midnight, distills the day's conversations into structured memory |
 
-She's built on [Pi SDK](https://github.com/mariozechner/pi) — the same LLM harness that powers OpenClaw — with [OpenRouter](https://openrouter.ai) for model access. You choose the model.
+She's built on [Pi SDK](https://github.com/mariozechner/pi) — the same LLM harness that powers OpenClaw. Pi supports Anthropic, OpenAI, Google Gemini, Groq, Mistral, Amazon Bedrock, and more — including [OpenRouter](https://openrouter.ai) as a meta-provider for 240+ models. You choose the provider and model.
 
 ### Memory — Plain Text, Always
 
@@ -69,7 +69,7 @@ Tools live in `plugins/` and are auto-discovered at startup. Fabiana ships with 
 
 - **Node.js ≥ 22**
 - A **Telegram bot** (takes 2 minutes via [@BotFather](https://t.me/BotFather))
-- An **OpenRouter API key** at [openrouter.ai/keys](https://openrouter.ai/keys)
+- An API key for your chosen LLM provider — [OpenRouter](https://openrouter.ai/keys) is the easiest starting point (one key for 240+ models)
 
 ### Setup
 
@@ -85,7 +85,11 @@ Create a `.env` file:
 TELEGRAM_BOT_TOKEN=your_token_from_botfather
 TELEGRAM_CHAT_ID=your_chat_id
 
-OPENROUTER_API_KEY=sk-or-v1-...
+# Add the key for whichever provider you choose (see docs/providers.md)
+OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (default)
+# ANTHROPIC_API_KEY=...           # Anthropic direct
+# OPENAI_API_KEY=...              # OpenAI direct
+# GEMINI_API_KEY=...              # Google Gemini direct
 
 # Optional — enables web search
 BRAVE_API_KEY=your_brave_api_key
@@ -105,12 +109,12 @@ Fabiana supports two ways to set credentials — choose what works best for you:
 **Option 1: `.env` file (simpler)**  
 Copy `.env.example` to `.env` and fill in your values. Great for local development and getting started quickly.
 
-**Option 2: Environment variables (more secure)**  
+**Option 2: Environment variables (more secure)**
 Set credentials directly in your shell or deployment environment:
 ```bash
 export TELEGRAM_BOT_TOKEN=your_token
 export TELEGRAM_CHAT_ID=your_chat_id
-export OPENROUTER_API_KEY=sk-or-v1-...
+export OPENROUTER_API_KEY=sk-or-v1-...  # or whichever provider key you're using
 ```
 
 This approach keeps secrets out of files and is preferred for production deployments or shared environments.
@@ -169,24 +173,33 @@ Then add `GOOGLE_CALENDAR_EMAIL=your@gmail.com` to `.env`.
 
 ---
 
-## Choosing a Model
+## Choosing a Provider and Model
 
-Edit `config.json` to change the model:
+Edit `config.json` to change the provider or model:
 
 ```json
 {
   "model": {
     "provider": "openrouter",
-    "modelId": "moonshotai/kimi-k2.5",
+    "modelId": "anthropic/claude-sonnet-4-5",
     "thinkingLevel": "low"
   }
 }
 ```
 
-Good options via OpenRouter:
-- `anthropic/claude-sonnet-4` — highest quality
-- `moonshotai/kimi-k2.5` — solid balance of quality and cost
-- `google/gemini-flash-1.5` — fast and cheap
+Fabiana supports a wide range of providers — Anthropic, OpenAI, Google Gemini, Groq, Mistral, Amazon Bedrock, xAI, and more. OpenRouter is the default because one API key covers them all, but you can switch to any provider directly if you prefer.
+
+**Popular choices:**
+
+| Provider | Model | Notes |
+|---|---|---|
+| `openrouter` | `anthropic/claude-sonnet-4-5` | Best quality via OpenRouter |
+| `openrouter` | `google/gemini-2.5-flash` | Fast and cheap |
+| `anthropic` | `claude-sonnet-4-6` | Direct Anthropic, slightly cheaper |
+| `google` | `gemini-2.5-flash` | Direct Google |
+| `groq` | `llama-3.3-70b-versatile` | Very fast, generous free tier |
+
+See [docs/providers.md](docs/providers.md) for the full list of supported providers, model IDs, and the env var each one needs.
 
 ---
 
