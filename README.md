@@ -59,13 +59,7 @@ Memory is tiered — hot files load every session, warm files load when relevant
 
 ### Plugins
 
-Tools live in `plugins/` and are auto-discovered at startup. Fabiana ships with three:
-
-- **`brave_search`** — Web search for news and facts
-- **`calendar`** — Google Calendar awareness via `gccli`
-- **`hackernews`** — Top stories from HN
-
-Adding your own is a single TypeScript file. See [Plugin Development](#plugin-development) below.
+Tools live in `plugins/` and are auto-discovered at startup. Fabiana ships with three: `brave_search`, `calendar`, and `hackernews`. Adding your own is a single TypeScript file — see [Plugin Development](docs/plugins.md).
 
 ---
 
@@ -198,120 +192,7 @@ Good options via OpenRouter:
 
 ## Plugin Development
 
-A plugin is a self-contained directory with three files. You can place it directly in `plugins/` for local use, or publish it as a GitHub repo for others to install with `fabiana plugins add`.
-
-### File structure
-
-```
-plugins/my-plugin/
-├── index.ts       ← tool implementation (required)
-├── package.json   ← must have "type": "module" (required)
-└── plugin.json    ← manifest: metadata, env vars, default config (required for publishing)
-```
-
-### `index.ts`
-
-Export a `tool` constant that satisfies `ToolDefinition`:
-
-```typescript
-import { Type } from '@sinclair/typebox';
-import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
-
-export const tool: ToolDefinition = {
-  name: 'my_tool',
-  label: 'My Tool',                    // shown in logs
-  description: 'What your tool does. Include when to use it.',
-  parameters: Type.Object({
-    query: Type.String({ description: 'The search query' }),
-  }),
-  execute: async (_toolCallId, params) => {
-    const apiKey = process.env.MY_API_KEY;
-    if (!apiKey) {
-      return {
-        content: [{ type: 'text' as const, text: '❌ MY_API_KEY not set.' }],
-        details: { error: 'Missing API key' },
-      };
-    }
-    const result = await doSomething(params.query, apiKey);
-    return {
-      content: [{ type: 'text' as const, text: result }],
-      details: { success: true },
-    };
-  },
-};
-```
-
-The `description` field is what the agent reads to decide when to use your tool — write it as instructions, not a one-liner.
-
-### `package.json`
-
-```json
-{ "name": "fabiana-plugin-my-plugin", "version": "1.0.0", "type": "module" }
-```
-
-`"type": "module"` is required. Fabiana uses ESM throughout.
-
-### `plugin.json`
-
-The manifest is what makes your plugin installable via `fabiana plugins add`. It declares metadata, required environment variables, and default config that gets written into `.fabiana/config/plugins.json` on install.
-
-```json
-{
-  "name": "my-plugin",
-  "version": "1.0.0",
-  "description": "Short description of what this plugin does",
-  "env": [
-    {
-      "key": "MY_API_KEY",
-      "required": true,
-      "description": "API key from example.com/api"
-    },
-    {
-      "key": "MY_OPTIONAL_SETTING",
-      "required": false,
-      "description": "Optional override (defaults to 'auto')"
-    }
-  ],
-  "config": {
-    "enabled": true,
-    "someDefault": 10
-  }
-}
-```
-
-- **`env`** — declares which environment variables your plugin needs. `fabiana doctor` will check these automatically for any installed plugin that has a `plugin.json`.
-- **`config`** — default values merged into `.fabiana/config/plugins.json` on install. Behavioral settings only — never put secrets here.
-
-### Installing locally
-
-Drop the folder into `plugins/` and restart Fabiana. She discovers it automatically.
-
-To configure or disable it, add an entry to `.fabiana/config/plugins.json`:
-
-```json
-{
-  "my-plugin": {
-    "enabled": true,
-    "someDefault": 20
-  }
-}
-```
-
-### Publishing and installing from GitHub
-
-Push your plugin as a GitHub repo with `index.ts` at the root (not nested in a subfolder). Then anyone can install it with:
-
-```bash
-fabiana plugins add your-username/my-plugin
-```
-
-This clones the repo, validates the structure, copies it to `plugins/`, and merges the default config from `plugin.json` into `.fabiana/config/plugins.json`. It will print any environment variables the plugin needs.
-
-To see what's installed:
-
-```bash
-fabiana plugins list
-```
+See [docs/plugins.md](docs/plugins.md) for the full guide — file structure, the `ToolDefinition` interface, `plugin.json` manifest format, and how to publish and install plugins from GitHub.
 
 ---
 

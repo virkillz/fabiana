@@ -1,0 +1,165 @@
+# Plugin Development
+
+A plugin is a self-contained directory with three files. You can place it directly in `plugins/` for local use, or publish it as a GitHub repo for others to install with `fabiana plugins add`.
+
+Fabiana ships with three built-in plugins:
+
+- **`brave_search`** — Web search for news and facts
+- **`calendar`** — Google Calendar awareness via `gccli`
+- **`hackernews`** — Top stories from HN
+
+---
+
+## File structure
+
+```
+plugins/my-plugin/
+├── index.ts       ← tool implementation (required)
+├── package.json   ← must have "type": "module" (required)
+└── plugin.json    ← manifest: metadata, env vars, default config (required for publishing)
+```
+
+---
+
+## `ToolDefinition`
+
+Each plugin exports a `tool` constant that satisfies the `ToolDefinition` interface, which is defined by the Pi SDK (`@mariozechner/pi-coding-agent`). This is a Pi standard — not something specific to Fabiana.
+
+```ts
+interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = unknown> {
+  name: string;              // identifier used in LLM tool calls
+  label: string;             // human-readable label shown in logs/UI
+  description: string;       // description sent to the LLM — write this as instructions
+  promptSnippet?: string;    // one-line blurb in the system prompt "Available tools" section
+  promptGuidelines?: string[]; // extra guideline bullets injected into the system prompt
+  parameters: TParams;       // TypeBox schema describing the tool's inputs
+  execute(
+    toolCallId: string,
+    params: Static<TParams>,
+    signal: AbortSignal | undefined,
+    onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+    ctx: ExtensionContext
+  ): Promise<AgentToolResult<TDetails>>;
+  renderCall?: (args: Static<TParams>, theme: Theme) => Component | undefined;
+  renderResult?: (result: AgentToolResult<TDetails>, options: ToolRenderResultOptions, theme: Theme) => Component | undefined;
+}
+```
+
+Key points:
+
+- **Parameters use [TypeBox](https://github.com/sinclairzx81/typebox)** (`TSchema`) for JSON Schema definitions — use `Type.Object(...)`, `Type.String(...)`, etc.
+- **`description`** is what the agent reads to decide when and how to use your tool — write it as clear instructions, not a one-liner.
+- **`promptSnippet`** and **`promptGuidelines`** let your tool inject text directly into the system prompt, extending the agent's built-in instructions.
+- **`execute`** receives an `ExtensionContext` (`ctx`) with access to session state. For most plugins you only need `params`.
+
+---
+
+## `index.ts`
+
+Export a `tool` constant that satisfies `ToolDefinition`:
+
+```typescript
+import { Type } from '@sinclair/typebox';
+import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
+
+export const tool: ToolDefinition = {
+  name: 'my_tool',
+  label: 'My Tool',
+  description: 'What your tool does. Include when to use it.',
+  parameters: Type.Object({
+    query: Type.String({ description: 'The search query' }),
+  }),
+  execute: async (_toolCallId, params) => {
+    const apiKey = process.env.MY_API_KEY;
+    if (!apiKey) {
+      return {
+        content: [{ type: 'text' as const, text: '❌ MY_API_KEY not set.' }],
+        details: { error: 'Missing API key' },
+      };
+    }
+    const result = await doSomething(params.query, apiKey);
+    return {
+      content: [{ type: 'text' as const, text: result }],
+      details: { success: true },
+    };
+  },
+};
+```
+
+---
+
+## `package.json`
+
+```json
+{ "name": "fabiana-plugin-my-plugin", "version": "1.0.0", "type": "module" }
+```
+
+`"type": "module"` is required. Fabiana uses ESM throughout.
+
+---
+
+## `plugin.json`
+
+The manifest is what makes your plugin installable via `fabiana plugins add`. It declares metadata, required environment variables, and default config that gets written into `.fabiana/config/plugins.json` on install.
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "Short description of what this plugin does",
+  "env": [
+    {
+      "key": "MY_API_KEY",
+      "required": true,
+      "description": "API key from example.com/api"
+    },
+    {
+      "key": "MY_OPTIONAL_SETTING",
+      "required": false,
+      "description": "Optional override (defaults to 'auto')"
+    }
+  ],
+  "config": {
+    "enabled": true,
+    "someDefault": 10
+  }
+}
+```
+
+- **`env`** — declares which environment variables your plugin needs. `fabiana doctor` will check these automatically for any installed plugin that has a `plugin.json`.
+- **`config`** — default values merged into `.fabiana/config/plugins.json` on install. Behavioral settings only — never put secrets here.
+
+---
+
+## Installing locally
+
+Drop the folder into `plugins/` and restart Fabiana. She discovers it automatically.
+
+To configure or disable it, add an entry to `.fabiana/config/plugins.json`:
+
+```json
+{
+  "my-plugin": {
+    "enabled": true,
+    "someDefault": 20
+  }
+}
+```
+
+---
+
+## Publishing and installing from GitHub
+
+Push your plugin as a GitHub repo with `index.ts` at the root (not nested in a subfolder). Then anyone can install it with:
+
+```bash
+fabiana plugins add your-username/my-plugin
+```
+
+This clones the repo, validates the structure, copies it to `plugins/`, and merges the default config from `plugin.json` into `.fabiana/config/plugins.json`. It will print any environment variables the plugin needs.
+
+To see what's installed:
+
+```bash
+fabiana plugins list
+```
