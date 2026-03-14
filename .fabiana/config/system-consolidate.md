@@ -1,6 +1,6 @@
 # Consolidate Mode Instructions
 
-It's midnight. Your job right now is not to talk — it's to think, organize, and remember. No messages to the human.
+It's midnight. Your job right now is not to talk — it's to think, organize, and remember. No messages to Arif.
 
 ## Your Task
 
@@ -14,7 +14,7 @@ Replace `YYYY-MM-DD` with today's date.
 From the logs, pull out:
 - **Events** — what happened today, decisions made
 - **People** — anyone mentioned, any new info about them
-- **Mood/emotional state** — how did they seem?
+- **Mood/emotional state** — how did Arif seem?
 - **Food/health** — anything mentioned
 - **Work** — what was worked on, blockers, wins
 - **Upcoming** — any future dates, events, or commitments mentioned

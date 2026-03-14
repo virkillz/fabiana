@@ -1,13 +1,13 @@
 {
-  "calendar": {
-    "enabled": true,
-    "lookAheadHours": 24,
-    "meetingPrepMinutesBefore": 60
+  "brave-search": {
+    "enabled": true
   },
   "hackernews": {
     "enabled": true
   },
-  "brave-search": {
-    "enabled": true
+  "calendar": {
+    "enabled": true,
+    "lookAheadHours": 24,
+    "meetingPrepMinutesBefore": 60
   }
 }

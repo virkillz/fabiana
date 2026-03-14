@@ -51,28 +51,64 @@ async function checkEnvironment() {
     await fs.access('.env');
     pass('.env file found');
   } catch {
-    advisory('.env file not found', 'env vars must be set another way');
+    advisory('.env file not found', 'env vars must be set via export or shell profile');
   }
 
-  for (const key of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'OPENROUTER_API_KEY']) {
-    if (process.env[key]) {
-      pass(key);
+  // Read config to know which env vars are actually required
+  let providerEnvVar: string | null = null;
+  let telegramEnabled = true;
+  let slackEnabled = false;
+
+  try {
+    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
+    const cfg = JSON.parse(raw);
+    telegramEnabled = cfg.channels?.telegram?.enabled ?? true;
+    slackEnabled = cfg.channels?.slack?.enabled ?? false;
+
+    // Look up env var for this provider
+    const { providers } = await import('./data/providers.js');
+    const p = providers.find((p) => p.id === cfg.model?.provider);
+    providerEnvVar = p?.envVar ?? null;
+  } catch {
+    // Config not found — fall through, checkConfig() will report it
+  }
+
+  if (providerEnvVar) {
+    if (process.env[providerEnvVar]) {
+      pass(providerEnvVar);
     } else {
-      error(key, 'not set');
+      error(providerEnvVar, 'not set');
     }
   }
 
+  if (telegramEnabled) {
+    for (const key of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID']) {
+      if (process.env[key]) {
+        pass(key);
+      } else {
+        error(key, 'not set');
+      }
+    }
+  }
+
+  if (slackEnabled) {
+    if (process.env['SLACK_BOT_TOKEN']) {
+      pass('SLACK_BOT_TOKEN');
+    } else {
+      error('SLACK_BOT_TOKEN', 'not set');
+    }
+  }
 }
 
 async function checkConfig() {
   section('Configuration');
 
   try {
-    const raw = await fs.readFile('config.json', 'utf-8');
+    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
     const cfg = JSON.parse(raw);
-    pass('config.json', `model: ${cfg.model?.provider}/${cfg.model?.modelId}`);
+    pass('.fabiana/config/config.json', `model: ${cfg.model?.provider}/${cfg.model?.modelId}`);
   } catch (e: any) {
-    error('config.json', e.message);
+    error('.fabiana/config/config.json', 'not found — run `fabiana init` to set up');
   }
 
   try {
@@ -103,7 +139,7 @@ async function checkPiSdk() {
 
   let modelId = 'unknown';
   try {
-    const raw = await fs.readFile('config.json', 'utf-8');
+    const raw = await fs.readFile('.fabiana/config/config.json', 'utf-8');
     const cfg = JSON.parse(raw);
     modelId = `${cfg.model?.provider}/${cfg.model?.modelId}`;
     const model = getModel(cfg.model?.provider, cfg.model?.modelId);
@@ -298,8 +334,10 @@ export async function runDoctor(): Promise<void> {
     process.exit(1);
   } else if (totalWarns > 0) {
     console.log(`${chalk.yellow('⚠')} ${chalk.yellow(`${totalWarns} warning(s)`)} — Fabiana will start but some features may not work`);
+    console.log(`\n  ${chalk.bold('Ready to go:')}  fabiana start`);
   } else {
     console.log(`${chalk.green('✓')} ${chalk.green('All checks passed')} — Fabiana is ready!`);
+    console.log(`\n  ${chalk.bold('Start her up:')}  ${chalk.cyan('fabiana start')}`);
   }
 
   console.log('');
