@@ -17,7 +17,8 @@
   },
   "files": [
     "bin/",
-    "dist/"
+    "dist/",
+    "ascii.txt"
   ],
   "keywords": [
     "ai",
