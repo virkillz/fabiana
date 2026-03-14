@@ -1,7 +1,7 @@
 {
   "name": "fabiana",
-  "version": "0.1.0",
-  "description": "Virtual life assistant powered by pi",
+  "version": "0.2.0",
+  "description": "Personal AI assistant that actually feels personal",
   "type": "module",
   "bin": {
     "fabiana": "bin/fabiana.js"
