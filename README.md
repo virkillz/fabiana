@@ -17,6 +17,11 @@ No dashboards. No commands to memorize. She just slides into your DM.
 
 ---
 
+<p align="center">
+  <img src="screenshot.png" alt="Screenshot"/>
+</p>
+
+
 ## What she does
 
 **She messages you first.** She has a schedule and a TODO list she manages herself. She'll reach out when there's something worth saying — not when you remember to ask.
