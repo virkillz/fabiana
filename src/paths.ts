@@ -30,3 +30,6 @@ const __dir = fileURLToPath(new URL('.', import.meta.url));
 const distPlugins = join(__dir, 'plugins');
 const srcPlugins  = join(__dir, '..', 'plugins');
 export const BUNDLED_PLUGINS_DIR = existsSync(distPlugins) ? distPlugins : srcPlugins;
+
+// Root of the installed/dev package (one level above src/ or dist/)
+export const PACKAGE_ROOT = join(__dir, '..');

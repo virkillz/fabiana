@@ -75,6 +75,26 @@ program
   });
 
 program
+  .command('system-prompt')
+  .description('Edit her system prompts — choose the mode')
+  .action(async () => {
+    const { select } = await import('@inquirer/prompts');
+    const choice = await select({
+      message: 'Which system prompt do you want to edit?',
+      choices: [
+        { name: 'system       — base identity prompt', value: 'system' },
+        { name: 'chat         — chat mode override', value: 'chat' },
+        { name: 'initiative   — initiative mode override', value: 'initiative' },
+        { name: 'consolidate  — consolidation mode override', value: 'consolidate' },
+        { name: 'external     — external mode override', value: 'external' },
+      ],
+    });
+    const file = choice === 'system' ? paths.systemMd() : paths.systemMd(choice);
+    const editor = process.env.EDITOR ?? process.env.VISUAL ?? 'vi';
+    spawnSync(editor, [file], { stdio: 'inherit' });
+  });
+
+program
   .command('doctor')
   .description('Is everything okay in there? Let\'s check')
   .action(runDoctor);

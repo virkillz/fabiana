@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
 import { providers } from '../data/providers.js';
-import { paths, PLUGINS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR } from '../paths.js';
+import { paths, PLUGINS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR, PACKAGE_ROOT } from '../paths.js';
 import { systemPromptTemplate } from '../prompts/system.js';
 import { systemChatTemplate } from '../prompts/system-chat.js';
 import { systemInitiativeTemplate } from '../prompts/system-initiative.js';
@@ -303,7 +303,16 @@ export async function runSetup(): Promise<void> {
   ok(paths.pluginsJson);
 
   // system prompts
-  await fs.writeFile(paths.systemMd(), fillTemplate(systemPromptTemplate, templateVars));
+  const systemMdContent = fillTemplate(systemPromptTemplate, templateVars);
+  const fileAccessSection = `
+## Your Source Code
+
+If ${userName} (or you) refers to "your codebase", "your source code", or "how you work", your source code is located at:
+**\`${PACKAGE_ROOT}/\`**
+
+You can read those files to understand your own capabilities and limitations.
+`;
+  await fs.writeFile(paths.systemMd(), systemMdContent + fileAccessSection);
   ok(paths.systemMd());
   await fs.writeFile(paths.systemMd('chat'), fillTemplate(systemChatTemplate, templateVars));
   ok(paths.systemMd('chat'));

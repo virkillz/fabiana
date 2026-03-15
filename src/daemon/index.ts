@@ -156,14 +156,17 @@ export async function runPiSession(
 
     let sendMessageCalled = false;
     let accumulatedResponse = '';
+    let lastActivityWasThinking = false;
 
     session.subscribe(async (event: AgentSessionEvent) => {
       if (event.type === 'message_update' && event.assistantMessageEvent.type === 'thinking_delta') {
         process.stdout.write('.');
+        lastActivityWasThinking = true;
       }
       if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
         process.stdout.write(event.assistantMessageEvent.delta);
         accumulatedResponse += event.assistantMessageEvent.delta;
+        lastActivityWasThinking = false;
       }
       if (event.type === 'tool_execution_start') {
         console.log(`\n🔧 Tool: ${event.toolName}`);
@@ -171,6 +174,7 @@ export async function runPiSession(
         if (event.toolName === 'send_message') {
           sendMessageCalled = true;
         }
+        lastActivityWasThinking = false;
       }
       if (event.type === 'tool_execution_end') {
         const status = event.isError ? '❌' : '✅';
@@ -195,6 +199,11 @@ export async function runPiSession(
 
     console.log('\n⏳ Waiting for agent to complete...');
     await session.agent.waitForIdle();
+
+    if (lastActivityWasThinking) {
+      console.warn('\n⚠️  LLM returned empty response (thinking with no text or tool call) — possible context overflow or provider issue');
+      await logger.log('Warning: empty response from LLM (thinking block only)');
+    }
 
     // Auto-send fallback: chat mode only, if agent didn't call send_message
     if (mode === 'chat' && channel && !sendMessageCalled && accumulatedResponse.trim()) {
