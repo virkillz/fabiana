@@ -159,33 +159,37 @@ export async function runPiSession(
     let lastActivityWasThinking = false;
 
     session.subscribe(async (event: AgentSessionEvent) => {
-      if (event.type === 'message_update' && event.assistantMessageEvent.type === 'thinking_delta') {
-        process.stdout.write('.');
-        lastActivityWasThinking = true;
-      }
-      if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
-        process.stdout.write(event.assistantMessageEvent.delta);
-        accumulatedResponse += event.assistantMessageEvent.delta;
-        lastActivityWasThinking = false;
-      }
-      if (event.type === 'tool_execution_start') {
-        console.log(`\n🔧 Tool: ${event.toolName}`);
-        await logger.log(`Tool: ${event.toolName}`);
-        if (event.toolName === 'send_message') {
-          sendMessageCalled = true;
+      try {
+        if (event.type === 'message_update' && event.assistantMessageEvent.type === 'thinking_delta') {
+          process.stdout.write('.');
+          lastActivityWasThinking = true;
         }
-        lastActivityWasThinking = false;
-      }
-      if (event.type === 'tool_execution_end') {
-        const status = event.isError ? '❌' : '✅';
-        console.log(`${status}`);
-      }
+        if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+          process.stdout.write(event.assistantMessageEvent.delta);
+          accumulatedResponse += event.assistantMessageEvent.delta;
+          lastActivityWasThinking = false;
+        }
+        if (event.type === 'tool_execution_start') {
+          console.log(`\n🔧 Tool: ${event.toolName}`);
+          await logger.log(`Tool: ${event.toolName}`);
+          if (event.toolName === 'send_message') {
+            sendMessageCalled = true;
+          }
+          lastActivityWasThinking = false;
+        }
+        if (event.type === 'tool_execution_end') {
+          const status = event.isError ? '❌' : '✅';
+          console.log(`${status}`);
+        }
 
-      const elapsed = (Date.now() - sessionStartTime) / 1000;
-      if (elapsed > config.limits.maxSessionDuration) {
-        await logger.log(`Session timeout (${elapsed}s > ${config.limits.maxSessionDuration}s)`);
-        console.log(`\n⏱️ Session timeout - aborting`);
-        session.abort();
+        const elapsed = (Date.now() - sessionStartTime) / 1000;
+        if (elapsed > config.limits.maxSessionDuration) {
+          await logger.log(`Session timeout (${elapsed}s > ${config.limits.maxSessionDuration}s)`);
+          console.log(`\n⏱️ Session timeout - aborting`);
+          session.abort();
+        }
+      } catch (err: any) {
+        console.error('\n⚠️  Event handler error (non-fatal):', err.message);
       }
     });
 
@@ -209,16 +213,24 @@ export async function runPiSession(
     if (mode === 'chat' && channel && !sendMessageCalled && accumulatedResponse.trim()) {
       console.log('\n⚠️  Agent did not call send_message - auto-sending accumulated response');
       const cleanResponse = accumulatedResponse.trim();
-      await channel.send(cleanResponse, incomingMsg?.channelId, incomingMsg?.threadId);
-      await channel.logConversation('fabiana', cleanResponse, incomingMsg?.source ?? channel.name);
-      console.log('📤 Auto-sent response');
+      try {
+        await channel.send(cleanResponse, incomingMsg?.channelId, incomingMsg?.threadId);
+        await channel.logConversation('fabiana', cleanResponse, incomingMsg?.source ?? channel.name);
+        console.log('📤 Auto-sent response');
+      } catch (err: any) {
+        console.error('❌ Auto-send fallback failed:', err.message);
+      }
     }
 
     // Auto-log full reasoning to silence log when initiative runs silently
     if (mode === 'initiative' && !sendMessageCalled && accumulatedResponse.trim()) {
       const timestamp = new Date().toISOString();
       const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
-      await fs.appendFile(paths.logs('initiative-silence.log'), entry, 'utf-8');
+      try {
+        await fs.appendFile(paths.logs('initiative-silence.log'), entry, 'utf-8');
+      } catch (err: any) {
+        console.error('❌ Failed to write silence log:', err.message);
+      }
     }
 
     console.log('\n━'.repeat(50));
@@ -420,12 +432,20 @@ export async function startDaemon(): Promise<void> {
 
   // Hourly check: expire stale external conversations (> 4 days inactive)
   cron.schedule('0 * * * *', async () => {
-    const expired = await conversationManager.expireStale();
-    for (const conv of expired) {
-      console.log(`\n⏳ External conversation expired: ${conv.id}`);
-      await primaryChannel.send(
-        `My conversation with **${conv.externalDisplayName}** about "${conv.purpose}" has gone quiet for 4 days. Want me to follow up?`
-      );
+    try {
+      const expired = await conversationManager.expireStale();
+      for (const conv of expired) {
+        console.log(`\n⏳ External conversation expired: ${conv.id}`);
+        try {
+          await primaryChannel.send(
+            `My conversation with **${conv.externalDisplayName}** about "${conv.purpose}" has gone quiet for 4 days. Want me to follow up?`
+          );
+        } catch (err: any) {
+          console.error(`❌ Failed to notify about expired conversation ${conv.id}:`, err.message);
+        }
+      }
+    } catch (err: any) {
+      console.error('❌ [SCHEDULED] Expiry check failed:', err.message);
     }
   });
 

@@ -25,26 +25,25 @@ async function fetchHNPage(page: number = 1): Promise<HNStory[]> {
   const html = await response.text();
   const stories: HNStory[] = [];
 
-  // Match story rows: <tr class="athing submission" id="ITEM_ID">
-  const storyRowRegex = /<tr class="athing submission" id="(\d+)">([\s\S]*?)<\/tr>/g;
-  const subtextRowRegex = /<span class="score" id="score_(\d+)">(\d+) points?<\/span>[\s\S]*?(\d+)&nbsp;comments?/;
-  const titleRegex = /<span class="titleline"><a href="([^"]+)">([\s\S]*?)<\/a>/;
+  // Find all story rows and their associated subtext
+  // Story row: <tr class="athing submission" id="ITEM_ID">...</tr>
+  // Subtext row: <tr><td colspan="2"></td><td class="subtext">...</td></tr>
+  const storyRegex = /<tr class="athing submission" id="(\d+)">[\s\S]*?<\/tr>\s*<tr>[\s\S]*?<td class="subtext">([\s\S]*?)<\/td>/g;
+  const titleRegex = /<span class="titleline"><a href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/;
   const rankRegex = /<span class="rank">(\d+)\.<\/span>/;
+  const scoreRegex = /<span class="score" id="score_\d+">(\d+) points?<\/span>/;
+  const commentsRegex = />(\d+)&nbsp;comments?|>discuss</;
 
-  // Split HTML into story blocks (each athing + its following subtext row)
-  const blocks = html.split('<tr class="athing submission"');
+  let match;
+  while ((match = storyRegex.exec(html)) !== null) {
+    const itemId = match[1];
+    const storyBlock = match[0];
+    const subtextBlock = match[2];
 
-  for (let i = 1; i < blocks.length; i++) {
-    const block = blocks[i];
+    const rankMatch = storyBlock.match(rankRegex);
+    const rank = rankMatch ? parseInt(rankMatch[1]) : stories.length + 1;
 
-    const idMatch = block.match(/^id="(\d+)"/);
-    if (!idMatch) continue;
-    const itemId = idMatch[1];
-
-    const rankMatch = block.match(rankRegex);
-    const rank = rankMatch ? parseInt(rankMatch[1]) : i;
-
-    const titleMatch = block.match(titleRegex);
+    const titleMatch = storyBlock.match(titleRegex);
     if (!titleMatch) continue;
     let url = titleMatch[1];
     const title = titleMatch[2].replace(/<[^>]+>/g, '');
@@ -53,9 +52,11 @@ async function fetchHNPage(page: number = 1): Promise<HNStory[]> {
       url = `https://news.ycombinator.com/${url}`;
     }
 
-    const subtextMatch = block.match(subtextRowRegex);
-    const points = subtextMatch ? parseInt(subtextMatch[2]) : 0;
-    const comments = subtextMatch ? parseInt(subtextMatch[3]) : 0;
+    const scoreMatch = subtextBlock.match(scoreRegex);
+    const points = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+
+    const commentsMatch = subtextBlock.match(commentsRegex);
+    const comments = commentsMatch && commentsMatch[1] ? parseInt(commentsMatch[1]) : 0;
 
     stories.push({ rank, title, url, points, comments, itemId });
   }

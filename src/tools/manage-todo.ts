@@ -74,8 +74,15 @@ export function createManageTodoTool(validator: PermissionValidator): ToolDefini
           };
         }
 
-        await fs.mkdir(targetDir, { recursive: true });
-        await fs.writeFile(filePath, content, 'utf-8');
+        try {
+          await fs.mkdir(targetDir, { recursive: true });
+          await fs.writeFile(filePath, content, 'utf-8');
+        } catch (err: any) {
+          return {
+            content: [{ type: 'text' as const, text: `❌ Error creating TODO: ${err.message}` }],
+            details: { error: err.message },
+          };
+        }
 
         return {
           content: [{ type: 'text' as const, text: `✅ TODO created: ${filename}` }],

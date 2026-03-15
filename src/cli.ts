@@ -13,6 +13,8 @@ import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
 import { runSetup } from './setup/index.js';
+import { providerStatus, providerUse, providerAdd } from './provider-cmd.js';
+import { modelStatus, modelUse, modelTest } from './model-cmd.js';
 
 const C = '\x1b[96m';   // cyan — name
 const D = '\x1b[2m';    // dim  — subtitle
@@ -124,6 +126,40 @@ plugins
   .action(pluginsList);
 
 program.addCommand(plugins);
+
+const provider = new Command('provider').description('Manage AI providers');
+
+provider
+  .command('use')
+  .description('Switch active provider and model')
+  .action(providerUse);
+
+provider
+  .command('add')
+  .description('Show credential setup instructions for a provider')
+  .action(providerAdd);
+
+provider
+  .action(providerStatus);
+
+program.addCommand(provider);
+
+const model = new Command('model').description('Manage the active model');
+
+model
+  .command('use')
+  .description('Switch to a different model')
+  .action(modelUse);
+
+model
+  .command('test')
+  .description('Send a live ping to verify the model works')
+  .action(modelTest);
+
+model
+  .action(modelStatus);
+
+program.addCommand(model);
 
 program.addHelpCommand(
   new Command('help')

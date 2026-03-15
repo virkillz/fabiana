@@ -57,7 +57,7 @@ function tailLines(text: string, maxLines: number): string {
 }
 
 export function buildPrompt(ctx: FabianaContext): string {
-  const todaySection = ctx.todayLog
+  const todaySection = ctx.mode === 'chat' && ctx.todayLog
     ? `\n\n### Today's Conversation\n${ctx.todayLog}`
     : '';
 
