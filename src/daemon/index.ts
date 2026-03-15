@@ -19,7 +19,7 @@ import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
 import { loadContext, buildPrompt, type SessionMode } from '../loaders/context.js';
 import { loadPlugins } from '../loaders/plugins.js';
-import { paths, PLUGINS_DIR } from '../paths.js';
+import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
 
 interface Config {
   model: {
@@ -95,6 +95,9 @@ export async function runPiSession(
     let systemPromptContent = modeSystemPrompt
       ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
       : baseSystemPrompt;
+
+    // Resolve .fabiana/ references to the actual home path so Fabiana uses correct absolute paths
+    systemPromptContent = systemPromptContent.replaceAll('.fabiana/', `${FABIANA_HOME}/`);
 
     // Inject owner name and conversation purpose into external system prompt
     if (mode.startsWith('external-')) {
