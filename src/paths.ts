@@ -7,11 +7,13 @@ export const FABIANA_HOME = process.env.FABIANA_HOME ?? join(homedir(), '.fabian
 export const CONFIG_DIR   = join(FABIANA_HOME, 'config');
 export const DATA_DIR     = join(FABIANA_HOME, 'data');
 export const PLUGINS_DIR  = join(FABIANA_HOME, 'plugins');
+export const SKILLS_DIR   = join(FABIANA_HOME, 'skills');
 
 export const paths = {
   configJson:   join(CONFIG_DIR, 'config.json'),
   manifestJson: join(CONFIG_DIR, 'manifest.json'),
   pluginsJson:  join(CONFIG_DIR, 'plugins.json'),
+  skillsJson:   join(CONFIG_DIR, 'skills.json'),
   stateJson:    join(CONFIG_DIR, 'state.json'),
   systemMd:     (suffix?: string) =>
     suffix ? join(CONFIG_DIR, `system-${suffix}.md`) : join(CONFIG_DIR, 'system.md'),

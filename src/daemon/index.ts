@@ -19,6 +19,7 @@ import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
 import { loadContext, buildPrompt, type SessionMode } from '../loaders/context.js';
 import { loadPlugins } from '../loaders/plugins.js';
+import { loadFabianaSkills, formatSkillsForPrompt } from '../loaders/skills.js';
 import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
 
 interface Config {
@@ -108,6 +109,13 @@ export async function runPiSession(
       if (conversationState) {
         systemPromptContent = systemPromptContent.replace('{purpose}', conversationState.purpose);
       }
+    }
+
+    // Append skills section — skills live at ~/.fabiana/skills/, scoped per user
+    const skills = await loadFabianaSkills();
+    if (skills.length > 0) {
+      systemPromptContent += formatSkillsForPrompt(skills);
+      console.log(`      Skills: ${skills.map(s => s.name).join(', ')}`);
     }
 
     const loader = new DefaultResourceLoader({

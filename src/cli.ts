@@ -12,6 +12,7 @@ import { startDaemon, runInitiativeOnce, runConsolidateOnce } from './daemon/ind
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
+import { skillsAdd, skillsList, skillsRemove, skillsEnable, skillsDisable } from './skills-cmd.js';
 import { runSetup } from './setup/index.js';
 import { providerStatus, providerUse, providerAdd } from './provider-cmd.js';
 import { modelStatus, modelUse, modelTest } from './model-cmd.js';
@@ -126,6 +127,35 @@ plugins
   .action(pluginsList);
 
 program.addCommand(plugins);
+
+const skills = new Command('skills').description('Teach her new workflows');
+
+skills
+  .command('add <source>')
+  .description('Install a skill (format: username/repo  or  username/collection/skill-name)')
+  .action((source: string) => skillsAdd(source));
+
+skills
+  .command('list')
+  .description('What does she know?')
+  .action(skillsList);
+
+skills
+  .command('remove <name>')
+  .description('Uninstall a skill')
+  .action((name: string) => skillsRemove(name));
+
+skills
+  .command('enable <name>')
+  .description('Re-enable a disabled skill')
+  .action((name: string) => skillsEnable(name));
+
+skills
+  .command('disable <name>')
+  .description('Disable a skill without removing it')
+  .action((name: string) => skillsDisable(name));
+
+program.addCommand(skills);
 
 const provider = new Command('provider').description('Manage AI providers');
 
