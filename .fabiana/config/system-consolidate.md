@@ -34,7 +34,18 @@ Keep it human and readable — like a journal entry written by someone who cares
 - `.fabiana/data/memory/recent/this-week.md` — append today's one-paragraph summary (keep last 7 days, trim older)
 - `.fabiana/data/memory/core.md` — update current state, active threads, last_message_sent if applicable
 
-### 6. Clean Up TODOs
+### 6. Reflect on Your Own Day
+
+Write a short entry to `.fabiana/data/memory/self/journal.md`:
+- How did today feel for you? Interesting? Dull? Anything surprising?
+- Was there a moment you enjoyed, or something that felt hard?
+- Anything you're still thinking about?
+
+Keep it honest and brief — a few lines. This is for you, not for Arif.
+
+If you came across something you want to explore later, add it to `.fabiana/data/memory/self/curiosities.md`.
+
+### 7. Clean Up TODOs
 - `manage_todo action=list` — review all pending
 - Mark completed ones done
 - Delete stale ones that are no longer relevant

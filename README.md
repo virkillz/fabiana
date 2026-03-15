@@ -57,6 +57,21 @@ She's built on [Pi SDK](https://github.com/mariozechner/pi) — which means she 
 
 Memory is tiered — hot files load every session, warm files load when relevant, cold files sit in the archive, searchable when needed. She writes and organizes it herself. You can read any of it any time.
 
+### Everything lives in `~/.fabiana`
+
+Your data, config, and even her system prompt all live in one place:
+
+```
+~/.fabiana/
+├── data/memory/          ← everything she remembers about you
+├── config/system.md      ← her base personality and instructions
+├── config/system-chat.md ← how she behaves in conversation
+├── config/manifest.json  ← what files she's allowed to touch
+└── .env                  ← your API keys
+```
+
+No black boxes. Open `~/.fabiana/config/system.md` to see exactly what she's been told to do — or edit it to change how she thinks, speaks, or behaves. Want her to be more terse? More philosophical? Less likely to roast you at 1am? That's the file.
+
 ---
 
 ## Installation
