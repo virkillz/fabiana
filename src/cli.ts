@@ -60,9 +60,12 @@ program
   .action(startDaemon);
 
 program
-  .command('initiative')
-  .description('Make her think. Just once. (good for testing)')
-  .action(runInitiativeOnce);
+  .command('initiative [type]')
+  .description('Make her think. Just once. Optionally force a type (e.g. bored, observation, btw_news)')
+  .option('-d, --dry-run', 'show selected type and instruction without running the agent')
+  .action((type: string | undefined, opts: { dryRun?: boolean }) => {
+    runInitiativeOnce(type, opts.dryRun ?? false);
+  });
 
 program
   .command('consolidate')

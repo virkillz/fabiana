@@ -21,12 +21,22 @@ export interface FabianaContext {
   incomingMessage?: string;
   timestamp: string;
   conversationState?: ConversationState;
+  // Initiative-specific
+  initiativeType?: string;
+  initiativeTypeInstruction?: string;
+  mood?: string;
+}
+
+export interface InitiativeOptions {
+  type?: string;
+  typeInstruction?: string;
 }
 
 export async function loadContext(
   mode: SessionMode,
   incomingMessage?: string,
-  conversationState?: ConversationState
+  conversationState?: ConversationState,
+  initiativeOptions?: InitiativeOptions,
 ): Promise<FabianaContext> {
   const timestamp = new Date().toISOString();
   const today = timestamp.slice(0, 10);
@@ -37,7 +47,24 @@ export async function loadContext(
   const rawLog = await readFile(paths.logs(`conversation-${today}.log`), '');
   const todayLog = tailLines(rawLog, TODAY_LOG_MAX_LINES);
 
-  return { mode, identity, core, recentMemory, todayLog, incomingMessage, timestamp, conversationState };
+  let mood: string | undefined;
+  if (mode === 'initiative') {
+    mood = await readFile(paths.moodMd, '');
+  }
+
+  return {
+    mode,
+    identity,
+    core,
+    recentMemory,
+    todayLog,
+    incomingMessage,
+    timestamp,
+    conversationState,
+    initiativeType: initiativeOptions?.type,
+    initiativeTypeInstruction: initiativeOptions?.typeInstruction,
+    mood,
+  };
 }
 
 async function readFile(filePath: string, fallback: string): Promise<string> {
@@ -61,8 +88,19 @@ export function buildPrompt(ctx: FabianaContext): string {
     ? `\n\n### Today's Conversation\n${ctx.todayLog}`
     : '';
 
+  // Initiative: inject type instruction and mood before the memory block
+  let initiativeHeader = '';
+  if (ctx.mode === 'initiative' && ctx.initiativeType) {
+    initiativeHeader = `\n\n---\n\n## 🎯 Initiative Type: ${ctx.initiativeType}\n\n${ctx.initiativeTypeInstruction ?? ''}`;
+    if (ctx.mood) {
+      initiativeHeader += `\n\n## 💭 Current Mood\n\n${ctx.mood}`;
+    }
+  } else if (ctx.mode === 'initiative' && ctx.mood) {
+    initiativeHeader = `\n\n---\n\n## 💭 Current Mood\n\n${ctx.mood}`;
+  }
+
   const base = `# Session Start — ${ctx.timestamp}
-**Mode**: ${ctx.mode}
+**Mode**: ${ctx.mode}${initiativeHeader}
 
 ---
 

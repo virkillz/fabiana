@@ -55,9 +55,18 @@ export class TelegramAdapter implements ChannelAdapter {
 
   // channelId and threadId are ignored — Telegram always replies to the configured chatId
   async send(text: string, _channelId?: string, _threadId?: string): Promise<void> {
-    await this.bot.telegram.sendMessage(this.chatId, text, {
-      parse_mode: 'Markdown',
-    });
+    try {
+      await this.bot.telegram.sendMessage(this.chatId, text, {
+        parse_mode: 'Markdown',
+      });
+    } catch (err: any) {
+      // Markdown parse error — retry as plain text
+      if (err?.message?.includes("can't parse entities")) {
+        await this.bot.telegram.sendMessage(this.chatId, text);
+      } else {
+        throw err;
+      }
+    }
   }
 
   drainQueue(): IncomingMessage[] {

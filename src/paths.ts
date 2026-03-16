@@ -22,6 +22,7 @@ export const paths = {
   sessions:     join(DATA_DIR, 'sessions'),
   agentTodo:    join(DATA_DIR, 'agent-todo'),
   conversations: join(DATA_DIR, 'conversations'),
+  moodMd:       join(DATA_DIR, 'memory', 'mood.md'),
   envFile:      join(FABIANA_HOME, '.env'),
 };
 

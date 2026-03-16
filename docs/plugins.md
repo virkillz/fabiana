@@ -2,6 +2,22 @@
 
 A plugin is a self-contained directory with three files. You can place it directly in `plugins/` for local use, or publish it as a GitHub repo for others to install with `fabiana plugins add`.
 
+## Skills vs. plugins
+
+Fabiana has two extension mechanisms. Choose the right one before you start:
+
+| | Skill | Plugin |
+|---|---|---|
+| **What it adds** | Specialized instructions and context | A new tool the agent can call |
+| **Requires code?** | No — just Markdown | Yes — TypeScript `execute()` function |
+| **Use when** | The agent needs to *know how* to do something with existing tools | The agent needs to *call an external API* or system it can't reach otherwise |
+
+**Use a skill** when the task is achievable with the tools Fabiana already has (`safe_read`, `safe_write`, `send_telegram`, etc.) and you just want to give the agent better instructions, templates, or domain knowledge. See [skills.md](./skills.md).
+
+**Use a plugin** when you need to call an external API, run a CLI tool, or add a capability that doesn't exist in the current tool set. Keep reading.
+
+---
+
 Fabiana ships with three built-in plugins:
 
 - **`brave_search`** — Web search for news and facts

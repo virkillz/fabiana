@@ -17,7 +17,9 @@ import type { ConversationState } from '../conversations/types.js';
 import { PermissionValidator } from '../utils/permissions.js';
 import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
-import { loadContext, buildPrompt, type SessionMode } from '../loaders/context.js';
+import { loadContext, buildPrompt, type SessionMode, type InitiativeOptions } from '../loaders/context.js';
+import { loadMood, getHoursSinceLastUserMessage, selectInitiativeType } from '../initiative/trigger.js';
+import { ALL_TYPES, TYPE_INSTRUCTIONS, type InitiativeType } from '../initiative/types.js';
 import { loadPlugins } from '../loaders/plugins.js';
 import { loadFabianaSkills, formatSkillsForPrompt } from '../loaders/skills.js';
 import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
@@ -60,7 +62,8 @@ export async function runPiSession(
   incomingMsg?: IncomingMessage,
   conversationState?: ConversationState,
   allChannels?: ChannelAdapter[],
-  conversationManager?: ConversationManager
+  conversationManager?: ConversationManager,
+  initiativeOptions?: InitiativeOptions,
 ): Promise<void> {
   const logger = Logger.create();
   const sessionStartTime = Date.now();
@@ -202,7 +205,7 @@ export async function runPiSession(
     });
 
     console.log('\n📚 Loading context...');
-    const context = await loadContext(mode, incomingMessage, conversationState);
+    const context = await loadContext(mode, incomingMessage, conversationState, initiativeOptions);
     const prompt = buildPrompt(context);
     console.log(`      Context loaded: ${prompt.length} chars`);
 
@@ -420,7 +423,12 @@ export async function startDaemon(): Promise<void> {
       }
       console.log('\n🌱 [SCHEDULED] Running initiative check...');
       try {
-        await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+        const mood = await loadMood();
+        const hoursSince = await getHoursSinceLastUserMessage();
+        const { type: selectedType, reason } = selectInitiativeType(mood, hoursSince);
+        const typeInstruction = TYPE_INSTRUCTIONS[selectedType];
+        console.log(`      🎯 Type: ${selectedType} (${reason})`);
+        await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager, { type: selectedType, typeInstruction });
         console.log('✅ [SCHEDULED] Initiative complete');
       } catch (err: any) {
         console.error('❌ [SCHEDULED] Initiative failed:', err.message);
@@ -520,15 +528,64 @@ export async function startDaemon(): Promise<void> {
   });
 }
 
-export async function runInitiativeOnce(): Promise<void> {
+export async function runInitiativeOnce(forcedType?: string, dryRun = false): Promise<void> {
   console.log('\n🌸 Fabiana - Initiative check');
   console.log('━'.repeat(50));
+
+  // Resolve initiative type — forced via CLI or auto-selected by trigger engine
+  const mood = await loadMood();
+  const hoursSince = await getHoursSinceLastUserMessage();
+
+  let selectedType: string;
+  let selectionReason: string;
+
+  if (forcedType) {
+    if (!(ALL_TYPES as string[]).includes(forcedType)) {
+      console.error(`❌ Unknown initiative type: "${forcedType}"`);
+      console.error(`   Valid types: ${ALL_TYPES.join(', ')}`);
+      process.exit(1);
+    }
+    selectedType = forcedType;
+    selectionReason = 'forced via CLI';
+  } else {
+    const result = selectInitiativeType(mood, hoursSince);
+    selectedType = result.type;
+    selectionReason = result.reason;
+  }
+
+  const typeInstruction = TYPE_INSTRUCTIONS[selectedType as InitiativeType];
+
+  console.log(`\n🎯 Initiative type: ${selectedType} (${selectionReason})`);
+  if (mood.current !== 'neutral') {
+    console.log(`💭 Mood: ${mood.current} (intensity: ${mood.intensity.toFixed(2)})`);
+  }
+  if (hoursSince !== null) {
+    console.log(`⏱️  Hours since last user message: ${hoursSince.toFixed(1)}h`);
+  }
+
+  if (dryRun) {
+    console.log('\n── Dry run — not sending ─────────────────────────────');
+    console.log(`\nType instruction:\n${typeInstruction}`);
+    console.log('─'.repeat(50));
+    return;
+  }
 
   const config = await loadConfig();
   const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
   for (const ch of channels) await ch.start();
   const conversationManager = new ConversationManager();
-  await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+
+  await runPiSession(
+    'initiative',
+    undefined,
+    primaryChannel,
+    undefined,
+    undefined,
+    channels,
+    conversationManager,
+    { type: selectedType, typeInstruction },
+  );
+
   for (const ch of channels) await ch.stop();
   process.exit(0);
 }
