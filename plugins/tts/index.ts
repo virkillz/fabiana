@@ -3,10 +3,10 @@ import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
 
 const DEFAULT_TTS_URL = 'http://178.128.50.246:5000';
 
-async function sendTelegramVoice(token: string, chatId: string, audioBuffer: Buffer): Promise<void> {
+async function sendTelegramVoice(token: string, chatId: string, audioBuffer: ArrayBuffer): Promise<void> {
   const formData = new FormData();
   formData.append('chat_id', chatId);
-  formData.append('voice', new File([audioBuffer], 'voice.ogg', { type: 'audio/ogg' }));
+  formData.append('voice', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg');
 
   const response = await fetch(`https://api.telegram.org/bot${token}/sendVoice`, {
     method: 'POST',
@@ -31,12 +31,16 @@ export const tool: ToolDefinition = {
   parameters: Type.Object({
     text: Type.String({ description: 'Text to speak (max 1000 characters)' }),
     voice: Type.Optional(Type.String({
-      description: 'Voice to use: Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki, Leo (default: Jasper)',
-      default: 'Jasper',
+      description: 'Voice to use (default: expr-voice-3-f)',
+      default: 'expr-voice-3-f',
+    })),
+    speed: Type.Optional(Type.Number({
+      description: 'Speech speed multiplier (default: 1.3)',
+      default: 1.3,
     })),
   }),
-  execute: async (_toolCallId, params: { text: string; voice?: string }) => {
-    const { text, voice = 'Jasper' } = params;
+  execute: async (_toolCallId, params: { text: string; voice?: string; speed?: number }) => {
+    const { text, voice = 'expr-voice-3-f', speed = 1.3 } = params;
 
     const ttsUrl = process.env.TTS_API_URL ?? DEFAULT_TTS_URL;
     const token = process.env.TELEGRAM_BOT_TOKEN;
