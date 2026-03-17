@@ -3,12 +3,16 @@ import { paths } from './paths.js';
 dotenvConfig({ path: paths.envFile }); // ~/.fabiana/.env (production)
 dotenvConfig();                         // .env in cwd (dev fallback)
 
+import { initDb } from './db/init.js';
+initDb();
+
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { spawnSync } from 'child_process';
 import { startDaemon, runInitiativeOnce, runConsolidateOnce, runSolitudeOnce } from './daemon/index.js';
+import { runMigration } from './db/migrate-from-files.js';
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
@@ -202,6 +206,15 @@ model
   .action(modelStatus);
 
 program.addCommand(model);
+
+const db = new Command('db').description('Manage the memory database');
+
+db
+  .command('migrate')
+  .description('Import existing flat memory files into SQLite (run once)')
+  .action(runMigration);
+
+program.addCommand(db);
 
 program.addHelpCommand(
   new Command('help')

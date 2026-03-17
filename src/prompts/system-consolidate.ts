@@ -24,17 +24,27 @@ Create: \`data/memory/diary/YYYY/YYYY-MM/YYYY-MM-DD.md\`
 
 Keep it human and readable — like a journal entry written by someone who cares, not a bullet report.
 
-### 4. Update Memory Files
+### 4. Write to Structured Memory (SQLite)
+
+Use the **memory-db** skill to persist what you extracted:
+
+- Any new or updated person → upsert into \`people\` (name, relationship, bio)
+- Any upcoming date or commitment → INSERT into \`events\` (title, date YYYY-MM-DD, notes)
+- Today's mood assessment of {{user_name}} → INSERT into \`moods\` (value, intensity 1–10, note)
+- Notable recurring topics or facts → INSERT into \`memories\` (category=\`'fact'\`, content, subject)
+- Archive cold memories: \`UPDATE memories SET expires_at = datetime('now') WHERE tier = 'cold' AND created_at < datetime('now', '-90 days') AND expires_at IS NULL;\`
+
+### 5. Update Memory Files
+
+Keep the hot-tier files current (they load into every session):
 - New person info → \`data/memory/people/[name].md\` (create if doesn't exist)
-- Upcoming events → \`data/memory/dates/upcoming.md\`
-- New interests/topics → \`data/memory/interests/topics.md\`
 - Health updates → \`data/memory/health.md\`
 
-### 5. Update Rolling Memory
+### 6. Update Rolling Memory
 - \`data/memory/recent/this-week.md\` — append today's one-paragraph summary (keep last 7 days, trim older)
 - \`data/memory/core.md\` — update current state, active threads, last_message_sent if applicable
 
-### 6. Clean Up TODOs
+### 7. Clean Up TODOs
 - \`manage_todo action=list\` — review all pending
 - Mark completed ones done
 - Delete stale ones that are no longer relevant

@@ -48,14 +48,24 @@ At session start, your context loader injects core memory into the user prompt:
 Proactively pull additional memory files when relevant using \`safe_read\`.
 
 ### Write Protocol
-**Update immediately when you learn:**
-- New facts about {{user_name}} → \`data/memory/identity.md\`
-- Current state/mood → \`data/memory/core.md\`
-- New info about a person → \`data/memory/people/[name].md\`
-- Upcoming date/event → \`data/memory/dates/upcoming.md\`
-- New interest/topic → \`data/memory/interests/topics.md\`
 
-**Format for atomic updates:**
+**Structured data → memory-db skill (preferred)**
+
+Use the \`memory-db\` skill for anything searchable or relational:
+- New info about a person → \`people\` table (upsert by name)
+- Upcoming date or event → \`events\` table
+- Discrete facts about {{user_name}} → \`memories\` table (\`category='fact'\`)
+- Interests and research → \`memories\` table (\`category='interest'\`)
+- Mood at end of session → \`moods\` table
+- News worth noting → \`memories\` table (\`category='news'\`)
+
+**Hot-tier files (always update directly)**
+
+Keep these files current — they are loaded into every session:
+- Identity anchor facts → \`data/memory/identity.md\`
+- Current state / active threads → \`data/memory/core.md\`
+
+**Format for file updates:**
 \`\`\`
 - [YYYY-MM-DD] [fact]
 \`\`\`

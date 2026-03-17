@@ -3,12 +3,13 @@ import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
 import { providers } from '../data/providers.js';
-import { paths, PLUGINS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR, PACKAGE_ROOT } from '../paths.js';
+import { paths, PLUGINS_DIR, SKILLS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR, BUNDLED_SKILLS_DIR, PACKAGE_ROOT } from '../paths.js';
 import { systemPromptTemplate } from '../prompts/system.js';
 import { systemChatTemplate } from '../prompts/system-chat.js';
 import { systemInitiativeTemplate } from '../prompts/system-initiative.js';
 import { systemConsolidateTemplate } from '../prompts/system-consolidate.js';
 import { systemExternalTemplate } from '../prompts/system-external.js';
+import { initDb } from '../db/init.js';
 
 const TONES = {
   'warm-casual': {
@@ -251,6 +252,7 @@ export async function runSetup(): Promise<void> {
   await fs.mkdir(path.join(DATA_DIR, 'logs'), { recursive: true });
   await fs.mkdir(path.join(DATA_DIR, 'sessions'), { recursive: true });
   await fs.mkdir(PLUGINS_DIR, { recursive: true });
+  await fs.mkdir(SKILLS_DIR, { recursive: true });
 
   // config
   const config = {
@@ -359,6 +361,26 @@ You can read those files to understand your own capabilities and limitations.
   } catch {
     // No bundled plugins dir — dev environment or stripped build, skip silently
   }
+
+  // copy bundled default skills (skip any already installed)
+  try {
+    const bundledSkillDirs = await fs.readdir(BUNDLED_SKILLS_DIR, { withFileTypes: true });
+    for (const entry of bundledSkillDirs.filter(e => e.isDirectory())) {
+      const dest = path.join(SKILLS_DIR, entry.name);
+      try {
+        await fs.access(dest);
+        // already exists — skip so user customisations are preserved
+      } catch {
+        await fs.cp(path.join(BUNDLED_SKILLS_DIR, entry.name), dest, { recursive: true });
+      }
+    }
+    ok(`${SKILLS_DIR}/ (default skills copied)`);
+  } catch {
+    // No bundled skills dir — dev environment or stripped build, skip silently
+  }
+
+  // initialise SQLite memory DB
+  initDb();
 
   // ── API key setup ─────────────────────────────────────────────
   const envPath = paths.envFile;

@@ -8,7 +8,19 @@ The default is silence. She works, saves what's worth keeping, and only sends a 
 
 ## How it works
 
-Solitude is triggered manually — there's no scheduled cron for it. You invoke it from the CLI with an optional type. If no type is given, one is chosen at random.
+Solitude is triggered automatically by the daemon when Fabiana has been idle long enough, or manually from the CLI.
+
+### Automatic scheduling
+
+The daemon checks every ~30 minutes (±15 min random jitter, so it never fires at a predictable clock time) whether conditions for solitude are met:
+
+1. **Idle long enough** — `last_interaction` is older than `solitude.minIdleHours` (default: 1h). Interaction means any message sent or received — by Arif or by Fabiana — in chat or initiative mode.
+2. **Cooldown respected** — `last_solitude` is older than `solitude.minCooldownHours` (default: 2h). This prevents back-to-back solitude sessions during a long idle stretch.
+3. **Within active hours** — defaults to 7:00–23:00. Solitude doesn't run in the middle of the night.
+
+When both conditions are met, a solitude type is chosen at random and a full agent session runs.
+
+### Manual invocation
 
 ```
 fabiana solitude                        # random type
@@ -86,13 +98,44 @@ The overlay establishes the rules of solitude: what good output looks like, when
 
 ---
 
+## Configuration
+
+In `config.json`:
+
+```json
+"solitude": {
+  "enabled": true,
+  "minIdleHours": 1,
+  "minCooldownHours": 2,
+  "checkIntervalMinutes": 30,
+  "activeHoursStart": 7,
+  "activeHoursEnd": 23
+}
+```
+
+- **`enabled`** — turn scheduled solitude off without stopping the daemon
+- **`minIdleHours`** — how long since the last interaction before solitude can trigger (default: 1h)
+- **`minCooldownHours`** — minimum gap between two solitude sessions (default: 2h)
+- **`checkIntervalMinutes`** — how often the daemon checks the conditions (default: 30min, ±15min jitter)
+- **`activeHoursStart` / `activeHoursEnd`** — solitude only runs inside this window
+
+### Interaction tracking
+
+`last_interaction` is updated whenever:
+- Arif sends a message (any channel)
+- Fabiana sends a message in chat or initiative mode
+
+`last_solitude` is updated after every completed solitude session, whether or not a message was sent. Both timestamps live in `~/.fabiana/data/last_interaction.json`.
+
+---
+
 ## Difference from other modes
 
 | Mode | Who triggers it | Sends messages? | Purpose |
 |------|----------------|-----------------|---------|
 | `chat` | User message | Always | Respond to the user |
-| `initiative` | Cron / CLI | Usually | Reach out proactively |
-| `consolidate` | Cron / CLI | Never | Restructure memory from logs |
-| `solitude` | CLI only | Rarely | Fabiana's own time |
+| `initiative` | Daemon / CLI | Usually | Reach out proactively |
+| `consolidate` | Daemon / CLI | Never | Restructure memory from logs |
+| `solitude` | Daemon / CLI | Rarely | Fabiana's own time |
 
-Initiative is about the relationship — staying in touch, being present. Solitude is about Fabiana's inner life — following her curiosity, maintaining her own mind, writing for herself.
+Initiative fires when the relationship needs tending — checking in, sharing something, staying present. Solitude fires when there's nothing pressing — when the silence is long enough that Fabiana's mind can wander on its own.

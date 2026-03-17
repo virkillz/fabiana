@@ -22,8 +22,10 @@ export const paths = {
   sessions:     join(DATA_DIR, 'sessions'),
   agentTodo:    join(DATA_DIR, 'agent-todo'),
   conversations: join(DATA_DIR, 'conversations'),
-  moodMd:       join(DATA_DIR, 'memory', 'mood.md'),
-  envFile:      join(FABIANA_HOME, '.env'),
+  moodMd:           join(DATA_DIR, 'memory', 'mood.md'),
+  memoryDb:         join(DATA_DIR, 'memory.db'),
+  lastInteractionJson: join(DATA_DIR, 'last_interaction.json'),
+  envFile:          join(FABIANA_HOME, '.env'),
 };
 
 // Default plugins bundled with the package.
@@ -33,6 +35,11 @@ const __dir = fileURLToPath(new URL('.', import.meta.url));
 const distPlugins = join(__dir, 'plugins');
 const srcPlugins  = join(__dir, '..', 'plugins');
 export const BUNDLED_PLUGINS_DIR = existsSync(distPlugins) ? distPlugins : srcPlugins;
+
+// Default skills bundled with the package.
+// Dev:  src/paths.ts → __dir = src/ → src/skills/
+// Prod: dist/paths.js → __dir = dist/ → dist/skills/
+export const BUNDLED_SKILLS_DIR = join(__dir, 'skills');
 
 // Root of the installed/dev package (one level above src/ or dist/)
 export const PACKAGE_ROOT = join(__dir, '..');

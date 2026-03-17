@@ -18,7 +18,8 @@ import { PermissionValidator } from '../utils/permissions.js';
 import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
 import { loadContext, buildPrompt, type SessionMode, type InitiativeOptions, type SolitudeOptions } from '../loaders/context.js';
-import { loadMood, getHoursSinceLastUserMessage, selectInitiativeType } from '../initiative/trigger.js';
+import { loadMood, selectInitiativeType } from '../initiative/trigger.js';
+import { updateLastInteraction, updateLastSolitude, getLastInteractionHoursAgo, getLastSolitudeHoursAgo } from '../utils/interaction.js';
 import { ALL_TYPES, TYPE_INSTRUCTIONS, type InitiativeType } from '../initiative/types.js';
 import { ALL_SOLITUDE_TYPES, SOLITUDE_TYPE_INSTRUCTIONS, type SolitudeType } from '../solitude/types.js';
 import { loadPlugins } from '../loaders/plugins.js';
@@ -42,6 +43,14 @@ interface Config {
     activeHoursStart: number;
     activeHoursEnd: number;
     checkIntervalMinutes: number;
+  };
+  solitude?: {
+    enabled: boolean;
+    minIdleHours: number;
+    minCooldownHours: number;
+    checkIntervalMinutes: number;
+    activeHoursStart: number;
+    activeHoursEnd: number;
   };
 }
 
@@ -140,6 +149,12 @@ export async function runPiSession(
       }
       if (conversationState && conversationManager) {
         await conversationManager.append(conversationState.id, 'fabiana', text);
+      }
+      // Track all outbound messages as interactions (resets idle clock)
+      if (mode !== 'solitude') {
+        await updateLastInteraction();
+      } else {
+        await updateLastSolitude();
       }
     };
 
@@ -419,32 +434,101 @@ export async function startDaemon(): Promise<void> {
 
   await sendStartupMessage(primaryChannel);
 
+  /**
+   * Schedules a recurring task with ±jitterMinutes random variation per invocation.
+   * This makes Fabiana's self-triggered behaviours feel less mechanical.
+   */
+  function scheduleWithJitter(
+    intervalMinutes: number,
+    jitterMinutes: number,
+    handler: () => Promise<void>,
+  ): void {
+    const schedule = () => {
+      const jitter = (Math.random() * 2 - 1) * jitterMinutes * 60_000; // ±jitter in ms
+      const delay = intervalMinutes * 60_000 + jitter;
+      setTimeout(async () => {
+        try {
+          await handler();
+        } catch (err: any) {
+          console.error('❌ [JITTER-SCHEDULER] Uncaught error:', err.message);
+        }
+        schedule(); // re-schedule after each run
+      }, delay);
+    };
+    schedule();
+  }
+
   const initiative = config.initiative;
   if (initiative.enabled) {
-    const intervalMinutes = initiative.checkIntervalMinutes ?? 180;
-    const cronExpr = intervalMinutes >= 60
-      ? `0 */${Math.floor(intervalMinutes / 60)} * * *`
-      : `*/${intervalMinutes} * * * *`;
+    const intervalMinutes = initiative.checkIntervalMinutes ?? 30;
+    console.log(`[INIT] Initiative checks every ~${intervalMinutes}min ±15min (active ${initiative.activeHoursStart}:00–${initiative.activeHoursEnd}:00)`);
 
-    console.log(`[INIT] Initiative checks every ${intervalMinutes}min (active ${initiative.activeHoursStart}:00–${initiative.activeHoursEnd}:00)`);
-
-    cron.schedule(cronExpr, async () => {
+    scheduleWithJitter(intervalMinutes, 15, async () => {
       const hour = new Date().getHours();
       if (hour < initiative.activeHoursStart || hour >= initiative.activeHoursEnd) {
         console.log(`\n🌱 [SCHEDULED] Initiative skipped — outside active hours (${hour}:00)`);
         return;
       }
+
+      // Gate: skip if last interaction was too recent
+      const hoursSinceInteraction = await getLastInteractionHoursAgo();
+      if (hoursSinceInteraction !== null && hoursSinceInteraction < initiative.minHoursBetweenMessages) {
+        console.log(`\n🌱 [SCHEDULED] Initiative skipped — last interaction ${hoursSinceInteraction.toFixed(1)}h ago (min: ${initiative.minHoursBetweenMessages}h)`);
+        return;
+      }
+
       console.log('\n🌱 [SCHEDULED] Running initiative check...');
       try {
         const mood = await loadMood();
-        const hoursSince = await getHoursSinceLastUserMessage();
-        const { type: selectedType, reason } = selectInitiativeType(mood, hoursSince);
+        const { type: selectedType, reason } = selectInitiativeType(mood, hoursSinceInteraction);
         const typeInstruction = TYPE_INSTRUCTIONS[selectedType];
         console.log(`      🎯 Type: ${selectedType} (${reason})`);
         await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager, { type: selectedType, typeInstruction });
         console.log('✅ [SCHEDULED] Initiative complete');
       } catch (err: any) {
         console.error('❌ [SCHEDULED] Initiative failed:', err.message);
+      }
+    });
+  }
+
+  const solitude = config.solitude;
+  if (solitude?.enabled) {
+    const solitudeInterval = solitude.checkIntervalMinutes ?? 30;
+    const minIdleHours = solitude.minIdleHours ?? 1;
+    const minCooldownHours = solitude.minCooldownHours ?? 2;
+    console.log(`[INIT] Solitude checks every ~${solitudeInterval}min ±15min (idle>${minIdleHours}h, cooldown>${minCooldownHours}h, active ${solitude.activeHoursStart}:00–${solitude.activeHoursEnd}:00)`);
+
+    scheduleWithJitter(solitudeInterval, 15, async () => {
+      const hour = new Date().getHours();
+      if (hour < (solitude.activeHoursStart ?? 7) || hour >= (solitude.activeHoursEnd ?? 23)) {
+        return;
+      }
+
+      const hoursSinceInteraction = await getLastInteractionHoursAgo();
+      const hoursSinceSolitude = await getLastSolitudeHoursAgo();
+
+      // Only enter solitude if idle long enough
+      if (hoursSinceInteraction !== null && hoursSinceInteraction < minIdleHours) {
+        return;
+      }
+
+      // Respect cooldown between solitude sessions
+      if (hoursSinceSolitude !== null && hoursSinceSolitude < minCooldownHours) {
+        console.log(`\n🌿 [SCHEDULED] Solitude skipped — last solitude ${hoursSinceSolitude.toFixed(1)}h ago (cooldown: ${minCooldownHours}h)`);
+        return;
+      }
+
+      console.log('\n🌿 [SCHEDULED] Entering solitude...');
+      try {
+        const selectedType = ALL_SOLITUDE_TYPES[Math.floor(Math.random() * ALL_SOLITUDE_TYPES.length)];
+        const typeInstruction = SOLITUDE_TYPE_INSTRUCTIONS[selectedType as SolitudeType];
+        console.log(`      🌿 Type: ${selectedType}`);
+        await runPiSession('solitude', undefined, primaryChannel, undefined, undefined, channels, conversationManager, undefined, { type: selectedType, typeInstruction });
+        // Always update lastSolitude after a session, even if no message was sent
+        await updateLastSolitude();
+        console.log('✅ [SCHEDULED] Solitude complete');
+      } catch (err: any) {
+        console.error('❌ [SCHEDULED] Solitude failed:', err.message);
       }
     });
   }
@@ -516,6 +600,7 @@ export async function startDaemon(): Promise<void> {
           // Owner message — full chat session on the channel it arrived on
           console.log(`\n📨 [${msg.source}] Message: "${msg.text.slice(0, 50)}..."`);
           await msgChannel.logConversation('user', msg.text, msg.source);
+          await updateLastInteraction();
           try {
             await runPiSession('chat', msg.text, msgChannel, msg, undefined, channels, conversationManager);
           } catch (err: any) {
@@ -547,7 +632,7 @@ export async function runInitiativeOnce(forcedType?: string, dryRun = false): Pr
 
   // Resolve initiative type — forced via CLI or auto-selected by trigger engine
   const mood = await loadMood();
-  const hoursSince = await getHoursSinceLastUserMessage();
+  const hoursSince = await getLastInteractionHoursAgo();
 
   let selectedType: string;
   let selectionReason: string;
@@ -573,7 +658,7 @@ export async function runInitiativeOnce(forcedType?: string, dryRun = false): Pr
     console.log(`💭 Mood: ${mood.current} (intensity: ${mood.intensity.toFixed(2)})`);
   }
   if (hoursSince !== null) {
-    console.log(`⏱️  Hours since last user message: ${hoursSince.toFixed(1)}h`);
+    console.log(`⏱️  Hours since last interaction: ${hoursSince.toFixed(1)}h`);
   }
 
   if (dryRun) {
