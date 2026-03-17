@@ -1,0 +1,13 @@
+{
+  "name": "stable-diffusion",
+  "version": "1.0.0",
+  "description": "Generate and send images via Stable Diffusion",
+  "env": [
+    { "key": "SD_API_URL", "required": false, "description": "Stable Diffusion WebUI API base URL (defaults to https://kitten-well-lemur.ngrok-free.app)" },
+    { "key": "TELEGRAM_BOT_TOKEN", "required": true, "description": "Telegram bot token (used to send photos)" },
+    { "key": "TELEGRAM_CHAT_ID", "required": true, "description": "Telegram chat ID to send images to" }
+  ],
+  "config": {
+    "enabled": true
+  }
+}

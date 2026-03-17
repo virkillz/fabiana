@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-stable-diffusion",
+  "version": "1.0.0",
+  "description": "Image generation via Stable Diffusion for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}

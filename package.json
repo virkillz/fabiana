@@ -1,6 +1,6 @@
 {
   "name": "fabiana",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "Personal AI assistant that actually feels personal",
   "type": "module",
   "bin": {

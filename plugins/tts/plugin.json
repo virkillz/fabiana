@@ -1,0 +1,13 @@
+{
+  "name": "tts",
+  "version": "1.0.0",
+  "description": "Convert text to speech and send voice messages via Telegram",
+  "env": [
+    { "key": "TTS_API_URL", "required": false, "description": "Kitten TTS API base URL (defaults to http://178.128.50.246:5000)" },
+    { "key": "TELEGRAM_BOT_TOKEN", "required": true, "description": "Telegram bot token (used to send voice messages)" },
+    { "key": "TELEGRAM_CHAT_ID", "required": true, "description": "Telegram chat ID to send voice messages to" }
+  ],
+  "config": {
+    "enabled": true
+  }
+}

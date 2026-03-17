@@ -239,6 +239,27 @@ export async function runPiSession(
       }
     };
 
+    // Lightweight status sender — chat mode only, no logging, no interaction tracking
+    const sendStatus = async (text: string) => {
+      if (mode === 'chat' && channel) {
+        await channel.send(text, incomingMsg?.channelId, incomingMsg?.threadId);
+      }
+    };
+
+    const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    const TOOL_STATUS: Record<string, string[]> = {
+      safe_read:    ['having a look...', 'let me check that.', 'nosing through your files...', 'one sec, reading.'],
+      safe_write:   ['writing that down...', 'putting that somewhere safe.', 'noted, filing it away.'],
+      safe_edit:    ['making a small edit...', 'adjusting things a bit.', 'tweaking that.'],
+      fetch_url:    ['heading out to the web...', 'brb, checking the internet.', 'let me go look that up.'],
+      brave_search: ['diving into search...', 'looking that up for you.', 'let me see what I can find.'],
+      hackernews:   ['peeking at hacker news...', 'seeing what the nerds are saying.', 'checking HN real quick.'],
+      calendar:     ['checking your schedule...', 'having a look at your calendar.', 'let me see what\'s coming up.'],
+      manage_todo:  ['peeking at your todos...', 'checking what\'s on your list.'],
+      bash:         ['running something for you...', 'brb, executing.', 'let me run that.'],
+    };
+
     console.log('[6/8] Creating tools...');
     const fabianaTools = createFabianaTools(permissions, sendMessage, {
       toolset,
@@ -283,6 +304,9 @@ export async function runPiSession(
           await logger.log(`Tool: ${event.toolName}`);
           if (event.toolName === 'send_message') {
             sendMessageCalled = true;
+          } else {
+            const variants = TOOL_STATUS[event.toolName];
+            if (variants) await sendStatus(pick(variants));
           }
           lastActivityWasThinking = false;
         }
@@ -308,6 +332,9 @@ export async function runPiSession(
     console.log(`      Context loaded: ${prompt.length} chars`);
 
     console.log('\n💭 Sending prompt to agent...');
+    if (mode === 'chat') {
+      await sendStatus(pick(['on it.', 'give me a sec.', 'let me think.', 'sure, one moment.', 'on it!']));
+    }
     await session.prompt(prompt);
 
     console.log('\n⏳ Waiting for agent to complete...');

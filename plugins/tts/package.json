@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-tts",
+  "version": "1.0.0",
+  "description": "Text-to-speech voice messages for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}

@@ -18,6 +18,7 @@ import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
 import { skillsAdd, skillsList, skillsRemove, skillsEnable, skillsDisable } from './skills-cmd.js';
 import { runSetup } from './setup/index.js';
+import { runSync } from './sync-cmd.js';
 import { providerStatus, providerUse, providerAdd } from './provider-cmd.js';
 import { modelStatus, modelUse, modelTest } from './model-cmd.js';
 
@@ -57,6 +58,11 @@ program
   .command('init')
   .description('First time? Let\'s get acquainted')
   .action(runSetup);
+
+program
+  .command('sync')
+  .description('Sync bundled plugins and skills to ~/.fabiana (run after upgrades)')
+  .action(runSync);
 
 program
   .command('start')

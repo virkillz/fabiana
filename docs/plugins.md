@@ -18,11 +18,13 @@ Fabiana has two extension mechanisms. Choose the right one before you start:
 
 ---
 
-Fabiana ships with three built-in plugins:
+Fabiana ships with several built-in plugins:
 
 - **`brave_search`** — Web search for news and facts
 - **`calendar`** — Google Calendar awareness via `gccli`
 - **`hackernews`** — Top stories from HN
+- **`stable-diffusion`** — Generate and send images via Stable Diffusion
+- **`tts`** — Convert text to speech and send voice messages via Telegram
 
 ---
 
@@ -163,9 +165,33 @@ The manifest is what makes your plugin installable via `fabiana plugins add`. It
 
 ## Installing locally
 
-Drop the folder into `plugins/` and restart Fabiana. She discovers it automatically.
+Fabiana loads plugins from `~/.fabiana/plugins/` at runtime — not from the project's `plugins/` directory. Plugins must be compiled and copied there before Fabiana can use them.
 
-To configure or disable it, add an entry to `.fabiana/config/plugins.json`:
+**Step 1 — Write your plugin** in `plugins/my-plugin/index.ts` (see above).
+
+**Step 2 — Build all plugins:**
+
+```bash
+node scripts/build-plugins.js
+```
+
+This compiles every plugin in `plugins/` to `dist/plugins/` using esbuild, bundling any third-party dependencies.
+
+**Step 3 — Copy the compiled plugin to Fabiana's home:**
+
+```bash
+cp -r dist/plugins/my-plugin ~/.fabiana/plugins/my-plugin
+```
+
+**Step 4 — Restart the daemon.** You should see this line in the startup logs:
+
+```
+[PLUGINS] ✓ my_tool v1.0.0
+```
+
+> Repeat steps 2–3 any time you update the plugin source. The `dist/` output is what gets deployed — never copy the raw `index.ts` to `~/.fabiana/plugins/`.
+
+To configure or disable it, add an entry to `~/.fabiana/config/plugins.json`:
 
 ```json
 {
