@@ -17,9 +17,10 @@ import type { ConversationState } from '../conversations/types.js';
 import { PermissionValidator } from '../utils/permissions.js';
 import { Logger } from '../utils/logger.js';
 import { createFabianaTools } from '../tools/index.js';
-import { loadContext, buildPrompt, type SessionMode, type InitiativeOptions } from '../loaders/context.js';
+import { loadContext, buildPrompt, type SessionMode, type InitiativeOptions, type SolitudeOptions } from '../loaders/context.js';
 import { loadMood, getHoursSinceLastUserMessage, selectInitiativeType } from '../initiative/trigger.js';
 import { ALL_TYPES, TYPE_INSTRUCTIONS, type InitiativeType } from '../initiative/types.js';
+import { ALL_SOLITUDE_TYPES, SOLITUDE_TYPE_INSTRUCTIONS, type SolitudeType } from '../solitude/types.js';
 import { loadPlugins } from '../loaders/plugins.js';
 import { loadFabianaSkills, formatSkillsForPrompt } from '../loaders/skills.js';
 import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
@@ -64,6 +65,7 @@ export async function runPiSession(
   allChannels?: ChannelAdapter[],
   conversationManager?: ConversationManager,
   initiativeOptions?: InitiativeOptions,
+  solitudeOptions?: SolitudeOptions,
 ): Promise<void> {
   const logger = Logger.create();
   const sessionStartTime = Date.now();
@@ -205,7 +207,7 @@ export async function runPiSession(
     });
 
     console.log('\n📚 Loading context...');
-    const context = await loadContext(mode, incomingMessage, conversationState, initiativeOptions);
+    const context = await loadContext(mode, incomingMessage, conversationState, initiativeOptions, solitudeOptions);
     const prompt = buildPrompt(context);
     console.log(`      Context loaded: ${prompt.length} chars`);
 
@@ -241,6 +243,17 @@ export async function runPiSession(
         await fs.appendFile(paths.logs('initiative-silence.log'), entry, 'utf-8');
       } catch (err: any) {
         console.error('❌ Failed to write silence log:', err.message);
+      }
+    }
+
+    // Log solitude session output
+    if (mode === 'solitude' && accumulatedResponse.trim()) {
+      const timestamp = new Date().toISOString();
+      const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
+      try {
+        await fs.appendFile(paths.logs('solitude.log'), entry, 'utf-8');
+      } catch (err: any) {
+        console.error('❌ Failed to write solitude log:', err.message);
       }
     }
 
@@ -599,6 +612,56 @@ export async function runConsolidateOnce(): Promise<void> {
   for (const ch of channels) await ch.start();
   const conversationManager = new ConversationManager();
   await runPiSession('consolidate', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+  for (const ch of channels) await ch.stop();
+  process.exit(0);
+}
+
+export async function runSolitudeOnce(forcedType?: string, dryRun = false): Promise<void> {
+  console.log('\n🌸 Fabiana - Solitude');
+  console.log('━'.repeat(50));
+
+  let selectedType: string;
+
+  if (forcedType) {
+    if (!(ALL_SOLITUDE_TYPES as string[]).includes(forcedType)) {
+      console.error(`❌ Unknown solitude type: "${forcedType}"`);
+      console.error(`   Valid types: ${ALL_SOLITUDE_TYPES.join(', ')}`);
+      process.exit(1);
+    }
+    selectedType = forcedType;
+    console.log(`\n🌿 Solitude type: ${selectedType} (forced via CLI)`);
+  } else {
+    // Pick randomly
+    selectedType = ALL_SOLITUDE_TYPES[Math.floor(Math.random() * ALL_SOLITUDE_TYPES.length)];
+    console.log(`\n🌿 Solitude type: ${selectedType} (random)`);
+  }
+
+  const typeInstruction = SOLITUDE_TYPE_INSTRUCTIONS[selectedType as SolitudeType];
+
+  if (dryRun) {
+    console.log('\n── Dry run — not running ─────────────────────────────');
+    console.log(`\nType instruction:\n${typeInstruction}`);
+    console.log('─'.repeat(50));
+    return;
+  }
+
+  const config = await loadConfig();
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  for (const ch of channels) await ch.start();
+  const conversationManager = new ConversationManager();
+
+  await runPiSession(
+    'solitude',
+    undefined,
+    primaryChannel,
+    undefined,
+    undefined,
+    channels,
+    conversationManager,
+    undefined,
+    { type: selectedType, typeInstruction },
+  );
+
   for (const ch of channels) await ch.stop();
   process.exit(0);
 }

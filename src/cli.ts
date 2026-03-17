@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { spawnSync } from 'child_process';
-import { startDaemon, runInitiativeOnce, runConsolidateOnce } from './daemon/index.js';
+import { startDaemon, runInitiativeOnce, runConsolidateOnce, runSolitudeOnce } from './daemon/index.js';
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
 import { pluginsAdd, pluginsList } from './plugins-cmd.js';
@@ -73,6 +73,14 @@ program
   .action(runConsolidateOnce);
 
 program
+  .command('solitude [type]')
+  .description('Give her time to herself. Optionally specify a type: reflection, deep_dive, news_curation, memory_housekeeping, creative')
+  .option('-d, --dry-run', 'show selected type and instruction without running')
+  .action((type: string | undefined, opts: { dryRun?: boolean }) => {
+    runSolitudeOnce(type, opts.dryRun ?? false);
+  });
+
+program
   .command('config')
   .description('Tweak her settings (opens config.json in your editor)')
   .action(() => {
@@ -92,6 +100,7 @@ program
         { name: 'chat         — chat mode override', value: 'chat' },
         { name: 'initiative   — initiative mode override', value: 'initiative' },
         { name: 'consolidate  — consolidation mode override', value: 'consolidate' },
+        { name: 'solitude     — solitude mode override', value: 'solitude' },
         { name: 'external     — external mode override', value: 'external' },
       ],
     });

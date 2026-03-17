@@ -6,6 +6,7 @@ export type SessionMode =
   | 'chat'
   | 'initiative'
   | 'consolidate'
+  | 'solitude'
   | 'daemon'
   | 'external-outreach'
   | 'external-reply';
@@ -25,9 +26,17 @@ export interface FabianaContext {
   initiativeType?: string;
   initiativeTypeInstruction?: string;
   mood?: string;
+  // Solitude-specific
+  solitudeType?: string;
+  solitudeTypeInstruction?: string;
 }
 
 export interface InitiativeOptions {
+  type?: string;
+  typeInstruction?: string;
+}
+
+export interface SolitudeOptions {
   type?: string;
   typeInstruction?: string;
 }
@@ -37,6 +46,7 @@ export async function loadContext(
   incomingMessage?: string,
   conversationState?: ConversationState,
   initiativeOptions?: InitiativeOptions,
+  solitudeOptions?: SolitudeOptions,
 ): Promise<FabianaContext> {
   const timestamp = new Date().toISOString();
   const today = timestamp.slice(0, 10);
@@ -48,7 +58,7 @@ export async function loadContext(
   const todayLog = tailLines(rawLog, TODAY_LOG_MAX_LINES);
 
   let mood: string | undefined;
-  if (mode === 'initiative') {
+  if (mode === 'initiative' || mode === 'solitude') {
     mood = await readFile(paths.moodMd, '');
   }
 
@@ -64,6 +74,8 @@ export async function loadContext(
     initiativeType: initiativeOptions?.type,
     initiativeTypeInstruction: initiativeOptions?.typeInstruction,
     mood,
+    solitudeType: solitudeOptions?.type,
+    solitudeTypeInstruction: solitudeOptions?.typeInstruction,
   };
 }
 
@@ -96,6 +108,16 @@ export function buildPrompt(ctx: FabianaContext): string {
       initiativeHeader += `\n\n## 💭 Current Mood\n\n${ctx.mood}`;
     }
   } else if (ctx.mode === 'initiative' && ctx.mood) {
+    initiativeHeader = `\n\n---\n\n## 💭 Current Mood\n\n${ctx.mood}`;
+  }
+
+  // Solitude: inject solitude type and mood
+  if (ctx.mode === 'solitude' && ctx.solitudeType) {
+    initiativeHeader = `\n\n---\n\n## 🌿 Solitude Type: ${ctx.solitudeType}\n\n${ctx.solitudeTypeInstruction ?? ''}`;
+    if (ctx.mood) {
+      initiativeHeader += `\n\n## 💭 Current Mood\n\n${ctx.mood}`;
+    }
+  } else if (ctx.mode === 'solitude' && ctx.mood) {
     initiativeHeader = `\n\n---\n\n## 💭 Current Mood\n\n${ctx.mood}`;
   }
 
