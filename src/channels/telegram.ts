@@ -36,6 +36,41 @@ export class TelegramAdapter implements ChannelAdapter {
       console.log(`📨 [telegram] Message queued: "${text.slice(0, 50)}"`);
     });
 
+    this.bot.on('photo', async (ctx) => {
+      if (ctx.chat.id !== this.chatId) return;
+
+      // Pick the largest available size (last in array)
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const caption = ctx.message.caption ?? '';
+
+      try {
+        const fileLink = await this.bot.telegram.getFileLink(photo.file_id);
+        const response = await fetch(fileLink.href);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const buffer = Buffer.from(await response.arrayBuffer());
+
+        await fs.mkdir(paths.imagesDir, { recursive: true });
+        const filename = `photo-${Date.now()}.jpg`;
+        const imagePath = paths.images(filename);
+        await fs.writeFile(imagePath, buffer);
+
+        const text = caption || '[sent a photo]';
+        this.queue.push({
+          text,
+          senderId: String(ctx.from.id),
+          channelId: String(ctx.chat.id),
+          threadId: String(ctx.message.message_id),
+          timestamp: new Date(ctx.message.date * 1000),
+          source: 'telegram',
+          imagePaths: [imagePath],
+        });
+
+        console.log(`📨 [telegram] Photo queued → ${imagePath}`);
+      } catch (err: any) {
+        console.error('❌ Failed to download Telegram photo:', err.message);
+      }
+    });
+
     this.bot.catch((err) => {
       console.error('Telegram error:', err);
     });

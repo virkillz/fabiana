@@ -5,6 +5,7 @@ export interface IncomingMessage {
   threadId?: string;   // Slack thread_ts, Telegram message_id, etc.
   timestamp: Date;
   source: string;      // "telegram" | "slack"
+  imagePaths?: string[];  // local paths to downloaded media files
 }
 
 export interface ChannelAdapter {

@@ -21,6 +21,8 @@ export const paths = {
   logs:         (filename: string)   => join(DATA_DIR, 'logs', filename),
   sessions:     join(DATA_DIR, 'sessions'),
   agentTodo:    join(DATA_DIR, 'agent-todo'),
+  imagesDir:    join(DATA_DIR, 'images'),
+  images:       (filename: string) => join(DATA_DIR, 'images', filename),
   conversations: join(DATA_DIR, 'conversations'),
   moodMd:           join(DATA_DIR, 'memory', 'mood.md'),
   memoryDb:         join(DATA_DIR, 'memory.db'),

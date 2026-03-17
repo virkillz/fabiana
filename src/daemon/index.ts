@@ -7,7 +7,7 @@ import {
   createBashTool,
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent';
-import { getModel } from '@mariozechner/pi-ai';
+import { getModel, type ImageContent } from '@mariozechner/pi-ai';
 import fs from 'fs/promises';
 import cron from 'node-cron';
 import { loadChannels, type ChannelsConfig } from '../channels/index.js';
@@ -335,7 +335,22 @@ export async function runPiSession(
     if (mode === 'chat') {
       await sendStatus(pick(['on it.', 'give me a sec.', 'let me think.', 'sure, one moment.', 'on it!']));
     }
-    await session.prompt(prompt);
+
+    // Load any attached images as base64 for the Pi SDK
+    let promptImages: ImageContent[] | undefined;
+    if (incomingMsg?.imagePaths?.length) {
+      promptImages = await Promise.all(
+        incomingMsg.imagePaths.map(async (p) => {
+          const data = await fs.readFile(p);
+          const ext = p.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+          return { type: 'image' as const, data: data.toString('base64'), mimeType };
+        })
+      );
+      console.log(`      🖼️  Attaching ${promptImages.length} image(s) to prompt`);
+    }
+
+    await session.prompt(prompt, promptImages ? { images: promptImages } : undefined);
 
     console.log('\n⏳ Waiting for agent to complete...');
     await session.agent.waitForIdle();
