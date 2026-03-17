@@ -64,7 +64,7 @@ export const tool: ToolDefinition = {
       const ttsResponse = await fetch(`${ttsUrl}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice }),
+        body: JSON.stringify({ text, voice, speed }),
       });
 
       if (!ttsResponse.ok) {
@@ -75,13 +75,13 @@ export const tool: ToolDefinition = {
         };
       }
 
-      const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+      const audioBuffer = await ttsResponse.arrayBuffer();
 
       await sendTelegramVoice(token, chatId, audioBuffer);
 
       return {
         content: [{ type: 'text' as const, text: `✅ Voice message sent! "${text.slice(0, 60)}${text.length > 60 ? '…' : ''}"` }],
-        details: { voice, bytes: audioBuffer.length, textLength: text.length },
+        details: { voice, speed, bytes: audioBuffer.byteLength, textLength: text.length },
       };
     } catch (err: any) {
       return {
