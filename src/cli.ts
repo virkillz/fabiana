@@ -11,7 +11,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { spawnSync } from 'child_process';
-import { startDaemon, runInitiativeOnce, runConsolidateOnce, runSolitudeOnce } from './daemon/index.js';
+import { startDaemon, runInitiativeOnce, runConsolidateOnce, runSolitudeOnce, runPromptPreview } from './daemon/index.js';
 import { runMigration } from './db/migrate-from-files.js';
 import { runDoctor } from './doctor.js';
 import { runBackup, runRestore } from './backup.js';
@@ -83,6 +83,11 @@ program
   .action((type: string | undefined, opts: { dryRun?: boolean }) => {
     runSolitudeOnce(type, opts.dryRun ?? false);
   });
+
+program
+  .command('prompt-preview [mode]')
+  .description('Preview the combined system prompt before it reaches the AI — all modes or a specific one')
+  .action((mode?: string) => runPromptPreview(mode));
 
 program
   .command('config')

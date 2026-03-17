@@ -65,6 +65,65 @@ async function loadConfig(): Promise<Config> {
   }
 }
 
+export async function buildSystemPrompt(
+  mode: SessionMode,
+  conversationState?: ConversationState,
+): Promise<string> {
+  const baseSystemPrompt = await fs.readFile(paths.systemMd(), 'utf-8');
+  // Both external-outreach and external-reply share system-external.md
+  const modeKey = mode.startsWith('external-') ? 'external' : mode;
+  const modeSystemPrompt = await fs.readFile(paths.systemMd(modeKey), 'utf-8').catch(() => '');
+  let systemPromptContent = modeSystemPrompt
+    ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
+    : baseSystemPrompt;
+
+  // Resolve .fabiana/ references to the actual home path so Fabiana uses correct absolute paths
+  systemPromptContent = systemPromptContent.replaceAll('.fabiana/', `${FABIANA_HOME}/`);
+
+  // Always inject the absolute home path so Fabiana knows where her files live
+  systemPromptContent = `Your home directory is ${FABIANA_HOME}. All your memory, config, and data files live there.\n\n${systemPromptContent}`;
+
+  // Inject owner name and conversation purpose into external system prompt
+  if (mode.startsWith('external-')) {
+    const identity = await fs.readFile(paths.memory('identity.md'), 'utf-8').catch(() => '');
+    const ownerNameMatch = identity.match(/(?:my name is|I am|name:\s*)([A-Z][a-z]+)/i);
+    const ownerName = ownerNameMatch ? ownerNameMatch[1] : 'the owner';
+    systemPromptContent = systemPromptContent.replace('{owner_name}', ownerName);
+    const purpose = conversationState?.purpose ?? '[purpose — provided at runtime]';
+    systemPromptContent = systemPromptContent.replace('{purpose}', purpose);
+  }
+
+  // Append skills section — skills live at ~/.fabiana/skills/, scoped per user
+  const skills = await loadFabianaSkills();
+  if (skills.length > 0) {
+    systemPromptContent += formatSkillsForPrompt(skills);
+  }
+
+  return systemPromptContent;
+}
+
+export async function runPromptPreview(mode?: string): Promise<void> {
+  const PREVIEW_MODES: SessionMode[] = ['chat', 'initiative', 'consolidate', 'solitude', 'external-outreach'];
+
+  const modesToShow = mode
+    ? [mode as SessionMode]
+    : PREVIEW_MODES;
+
+  for (const m of modesToShow) {
+    const bar = '═'.repeat(60);
+    console.log(`\n${bar}`);
+    console.log(`  SYSTEM PROMPT — ${m.toUpperCase()}`);
+    console.log(bar);
+    try {
+      const prompt = await buildSystemPrompt(m);
+      console.log(prompt);
+      console.log(`\n[${prompt.length.toLocaleString()} chars]`);
+    } catch (err: any) {
+      console.error(`❌ Failed to build prompt for ${m}: ${err.message}`);
+    }
+  }
+}
+
 export async function runPiSession(
   mode: SessionMode,
   incomingMessage?: string,
@@ -103,32 +162,9 @@ export async function runPiSession(
     console.log('      ✓ Model loaded');
 
     console.log('[5/8] Loading system prompt...');
-    const baseSystemPrompt = await fs.readFile(paths.systemMd(), 'utf-8');
-    // Both external-outreach and external-reply share system-external.md
-    const modeKey = mode.startsWith('external-') ? 'external' : mode;
-    const modeSystemPrompt = await fs.readFile(paths.systemMd(modeKey), 'utf-8').catch(() => '');
-    let systemPromptContent = modeSystemPrompt
-      ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
-      : baseSystemPrompt;
-
-    // Resolve .fabiana/ references to the actual home path so Fabiana uses correct absolute paths
-    systemPromptContent = systemPromptContent.replaceAll('.fabiana/', `${FABIANA_HOME}/`);
-
-    // Inject owner name and conversation purpose into external system prompt
-    if (mode.startsWith('external-')) {
-      const identity = await fs.readFile(paths.memory('identity.md'), 'utf-8').catch(() => '');
-      const ownerNameMatch = identity.match(/(?:my name is|I am|name:\s*)([A-Z][a-z]+)/i);
-      const ownerName = ownerNameMatch ? ownerNameMatch[1] : 'the owner';
-      systemPromptContent = systemPromptContent.replace('{owner_name}', ownerName);
-      if (conversationState) {
-        systemPromptContent = systemPromptContent.replace('{purpose}', conversationState.purpose);
-      }
-    }
-
-    // Append skills section — skills live at ~/.fabiana/skills/, scoped per user
+    const systemPromptContent = await buildSystemPrompt(mode, conversationState);
     const skills = await loadFabianaSkills();
     if (skills.length > 0) {
-      systemPromptContent += formatSkillsForPrompt(skills);
       console.log(`      Skills: ${skills.map(s => s.name).join(', ')}`);
     }
 

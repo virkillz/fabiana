@@ -1,8 +1,6 @@
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
 import { PermissionValidator } from '../utils/permissions.js';
 import { createSafeReadTool } from './safe-read.js';
-import { createSafeWriteTool } from './safe-write.js';
-import { createSafeEditTool } from './safe-edit.js';
 import { createSendMessageTool } from './send-message.js';
 import { createManageTodoTool } from './manage-todo.js';
 import { createFetchUrlTool } from './fetch-url.js';
@@ -33,9 +31,6 @@ export function createFabianaTools(
 
   // Full toolset for owner sessions
   const tools: ToolDefinition[] = [
-    createSafeReadTool(),
-    createSafeWriteTool(validator),
-    createSafeEditTool(validator),
     createSendMessageTool(sendMessage),
     createManageTodoTool(validator),
     createFetchUrlTool(),
