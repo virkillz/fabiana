@@ -155,15 +155,15 @@ export function selectInitiativeType(
   // observation and confession are rare — they land harder when unexpected.
 
   const pool: Weighted[] = [
-    { type: 'random_thought', weight: 10 },
-    { type: 'hypothetical',   weight: 10 },
-    { type: 'recommendation', weight: 10 },
-    { type: 'bored',          weight: 10 },
-    { type: 'btw_news',       weight:  8 },
-    { type: 'deep_question',  weight:  8 },
-    { type: 'todo_reminder',  weight:  8 },
-    { type: 'observation',    weight:  4 },
-    { type: 'confession',     weight:  4 },
+    { type: 'random_thought',    weight: 10 },
+    { type: 'hypothetical',      weight: 10 },
+    { type: 'recommendation',    weight: 10 },
+    { type: 'btw_news',          weight:  9 },
+    { type: 'deep_question',     weight:  9 },
+    { type: 'todo_reminder',     weight:  8 },
+    { type: 'calendar_reminder', weight:  7 },
+    { type: 'observation',       weight:  4 },
+    { type: 'confession',        weight:  4 },
   ];
 
   return { type: weightedPick(pool), reason: 'weighted random' };
