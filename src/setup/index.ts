@@ -9,6 +9,7 @@ import { systemChatTemplate } from '../prompts/system-chat.js';
 import { systemInitiativeTemplate } from '../prompts/system-initiative.js';
 import { systemConsolidateTemplate } from '../prompts/system-consolidate.js';
 import { systemExternalTemplate } from '../prompts/system-external.js';
+import { systemSolitudeTemplate } from '../prompts/system-solitude.js';
 import { initDb } from '../db/init.js';
 
 const TONES = {
@@ -324,6 +325,8 @@ You can read those files to understand your own capabilities and limitations.
   ok(paths.systemMd('consolidate'));
   await fs.writeFile(paths.systemMd('external'), fillTemplate(systemExternalTemplate, templateVars));
   ok(paths.systemMd('external'));
+  await fs.writeFile(paths.systemMd('solitude'), fillTemplate(systemSolitudeTemplate, templateVars));
+  ok(paths.systemMd('solitude'));
 
   // seed memory
   const today = new Date().toISOString().split('T')[0];

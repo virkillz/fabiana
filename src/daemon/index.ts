@@ -25,6 +25,7 @@ import { ALL_SOLITUDE_TYPES, SOLITUDE_TYPE_INSTRUCTIONS, type SolitudeType } fro
 import { loadPlugins } from '../loaders/plugins.js';
 import { loadFabianaSkills, formatSkillsForPrompt } from '../loaders/skills.js';
 import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
+import { estimateTokens, formatTokenReport, type TokenSection } from '../utils/tokens.js';
 
 interface Config {
   model: {
@@ -102,25 +103,69 @@ export async function buildSystemPrompt(
   return systemPromptContent;
 }
 
-export async function runPromptPreview(mode?: string): Promise<void> {
-  const PREVIEW_MODES: SessionMode[] = ['chat', 'initiative', 'consolidate', 'solitude', 'external-outreach'];
+export async function runPromptPreview(mode: string): Promise<void> {
+  const bar = '═'.repeat(60);
+  try {
+    const sessionMode = mode as SessionMode;
 
-  const modesToShow = mode
-    ? [mode as SessionMode]
-    : PREVIEW_MODES;
+    // Build initiative/solitude options for preview (use first type as example)
+    const initiativeOptions: InitiativeOptions | undefined =
+      sessionMode === 'initiative'
+        ? { type: ALL_TYPES[0], typeInstruction: TYPE_INSTRUCTIONS[ALL_TYPES[0]] }
+        : undefined;
 
-  for (const m of modesToShow) {
-    const bar = '═'.repeat(60);
+    const solitudeOptions: SolitudeOptions | undefined =
+      sessionMode === 'solitude'
+        ? { type: ALL_SOLITUDE_TYPES[0], typeInstruction: SOLITUDE_TYPE_INSTRUCTIONS[ALL_SOLITUDE_TYPES[0]] }
+        : undefined;
+
+    // Placeholder incoming message for chat mode
+    const incomingMessage =
+      sessionMode === 'chat' ? '[incoming message — provided at runtime]' : undefined;
+
+    const [systemPrompt, ctx] = await Promise.all([
+      buildSystemPrompt(sessionMode),
+      loadContext(sessionMode, incomingMessage, undefined, initiativeOptions, solitudeOptions),
+    ]);
+    const userPrompt = buildPrompt(ctx);
+
     console.log(`\n${bar}`);
-    console.log(`  SYSTEM PROMPT — ${m.toUpperCase()}`);
+    console.log(`  SYSTEM PROMPT — ${mode.toUpperCase()}`);
     console.log(bar);
-    try {
-      const prompt = await buildSystemPrompt(m);
-      console.log(prompt);
-      console.log(`\n[${prompt.length.toLocaleString()} chars]`);
-    } catch (err: any) {
-      console.error(`❌ Failed to build prompt for ${m}: ${err.message}`);
+    console.log(systemPrompt);
+
+    console.log(`\n${bar}`);
+    console.log(`  USER PROMPT — ${mode.toUpperCase()}`);
+    console.log(bar);
+    console.log(userPrompt);
+
+    // Build per-section token breakdown
+    const sections: TokenSection[] = [
+      { label: 'System prompt',        tokens: estimateTokens(systemPrompt) },
+      { label: '  Identity',           tokens: estimateTokens(ctx.identity) },
+      { label: '  Core state',         tokens: estimateTokens(ctx.core) },
+      { label: '  Recent (this week)', tokens: estimateTokens(ctx.recentMemory) },
+    ];
+
+    if (ctx.todayLog && sessionMode === 'chat') {
+      sections.push({ label: '  Today\'s conversation', tokens: estimateTokens(ctx.todayLog) });
     }
+    if (ctx.incomingMessage) {
+      sections.push({ label: '  Incoming message', tokens: estimateTokens(ctx.incomingMessage) });
+    }
+    if (ctx.initiativeTypeInstruction) {
+      sections.push({ label: '  Initiative type', tokens: estimateTokens(ctx.initiativeTypeInstruction) });
+    }
+    if (ctx.solitudeTypeInstruction) {
+      sections.push({ label: '  Solitude type', tokens: estimateTokens(ctx.solitudeTypeInstruction) });
+    }
+    if (ctx.mood) {
+      sections.push({ label: '  Mood', tokens: estimateTokens(ctx.mood) });
+    }
+
+    console.log(formatTokenReport(sections));
+  } catch (err: any) {
+    console.error(`❌ Failed to build prompt for ${mode}: ${err.message}`);
   }
 }
 

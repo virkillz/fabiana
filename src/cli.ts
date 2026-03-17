@@ -86,8 +86,23 @@ program
 
 program
   .command('prompt-preview [mode]')
-  .description('Preview the combined system prompt before it reaches the AI — all modes or a specific one')
-  .action((mode?: string) => runPromptPreview(mode));
+  .description('Preview the combined system prompt for a mode')
+  .action(async (mode?: string) => {
+    if (!mode) {
+      const { select } = await import('@inquirer/prompts');
+      mode = await select({
+        message: 'Which mode do you want to preview?',
+        choices: [
+          { name: 'chat              — incoming message session', value: 'chat' },
+          { name: 'initiative        — proactive outreach session', value: 'initiative' },
+          { name: 'consolidate       — nightly memory cleanup', value: 'consolidate' },
+          { name: 'solitude          — unstructured self-directed session', value: 'solitude' },
+          { name: 'external-outreach — outreach to a third party', value: 'external-outreach' },
+        ],
+      });
+    }
+    runPromptPreview(mode);
+  });
 
 program
   .command('config')
