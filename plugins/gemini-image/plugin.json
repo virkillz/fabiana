@@ -1,0 +1,13 @@
+{
+  "name": "gemini-image",
+  "version": "1.0.0",
+  "description": "Generate or edit images for work via Google Gemini (diagrams, designs, photo edits)",
+  "env": [
+    { "key": "GEMINI_API_KEY", "required": true, "description": "Google Gemini API key" },
+    { "key": "TELEGRAM_BOT_TOKEN", "required": true, "description": "Telegram bot token (used to send photos)" },
+    { "key": "TELEGRAM_CHAT_ID", "required": true, "description": "Telegram chat ID to send images to" }
+  ],
+  "config": {
+    "enabled": true
+  }
+}

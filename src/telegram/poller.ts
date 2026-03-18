@@ -1,5 +1,6 @@
 import { Telegraf } from 'telegraf';
 import fs from 'fs/promises';
+import https from 'https';
 import { paths } from '../paths.js';
 
 export interface IncomingMessage {
@@ -17,7 +18,9 @@ export class TelegramPoller {
   private running = false;
 
   constructor(token: string, chatId: number) {
-    this.bot = new Telegraf(token);
+    // Force IPv4 — servers with unreachable IPv6 will timeout otherwise
+    const agent = new https.Agent({ family: 4 });
+    this.bot = new Telegraf(token, { telegram: { agent } });
     this.chatId = chatId;
     this.setupHandlers();
   }

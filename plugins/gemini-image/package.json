@@ -1,0 +1,9 @@
+{
+  "name": "fabiana-plugin-gemini-image",
+  "version": "1.0.0",
+  "description": "Work-focused image generation and editing via Google Gemini for Fabiana",
+  "type": "module",
+  "main": "index.js",
+  "author": "fabiana-core",
+  "license": "MIT"
+}
