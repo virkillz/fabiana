@@ -13,20 +13,24 @@ export interface LoadedChannels {
   primary: ChannelAdapter;
 }
 
-export async function loadChannels(channels?: ChannelsConfig): Promise<LoadedChannels> {
+export async function loadChannels(
+  channels?: ChannelsConfig,
+  env?: Record<string, string | undefined>,
+): Promise<LoadedChannels> {
   // Fallback for installs that don't have a channels block yet
   if (!channels) {
     channels = { primary: 'telegram', telegram: { enabled: true } };
   }
 
+  // Use the supplied env record (for per-agent credentials) or fall back to process.env
+  const e = env ?? (process.env as Record<string, string | undefined>);
+
   const adapters: ChannelAdapter[] = [];
 
   // Telegram — enabled by default if the block exists or there is no channels config
   if (channels.telegram?.enabled !== false) {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID
-      ? parseInt(process.env.TELEGRAM_CHAT_ID)
-      : undefined;
+    const token = e.TELEGRAM_BOT_TOKEN;
+    const chatId = e.TELEGRAM_CHAT_ID ? parseInt(e.TELEGRAM_CHAT_ID) : undefined;
     if (!token || !chatId) {
       throw new Error('TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required for the Telegram channel');
     }

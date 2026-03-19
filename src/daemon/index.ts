@@ -9,6 +9,7 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { getModel, type ImageContent } from '@mariozechner/pi-ai';
 import fs from 'fs/promises';
+import { parse as parseEnv } from 'dotenv';
 import cron from 'node-cron';
 import { loadChannels, type ChannelsConfig } from '../channels/index.js';
 import type { ChannelAdapter, IncomingMessage } from '../channels/types.js';
@@ -24,7 +25,9 @@ import { ALL_TYPES, TYPE_INSTRUCTIONS, type InitiativeType } from '../initiative
 import { ALL_SOLITUDE_TYPES, SOLITUDE_TYPE_INSTRUCTIONS, type SolitudeType } from '../solitude/types.js';
 import { loadPlugins } from '../loaders/plugins.js';
 import { loadFabianaSkills, formatSkillsForPrompt } from '../loaders/skills.js';
-import { paths, PLUGINS_DIR, FABIANA_HOME } from '../paths.js';
+import { SHARED_PLUGINS_DIR, createAgentPaths, type AgentPaths, DEFAULT_AGENT_HOME } from '../paths.js';
+import { listAgents, resolveAgentHome } from '../agent-registry.js';
+import { initDb } from '../db/init.js';
 import { estimateTokens, formatTokenReport, type TokenSection } from '../utils/tokens.js';
 
 interface Config {
@@ -55,38 +58,49 @@ interface Config {
   };
 }
 
-async function loadConfig(): Promise<Config> {
+async function loadConfig(agentPaths: AgentPaths): Promise<Config> {
   try {
-    const content = await fs.readFile(paths.configJson, 'utf-8');
+    const content = await fs.readFile(agentPaths.configJson, 'utf-8');
     return JSON.parse(content);
   } catch {
     throw new Error(
-      `Config not found at ${paths.configJson}. Run 'fabiana init' to set up your companion.`
+      `Config not found at ${agentPaths.configJson}. Run 'fabiana init' to set up your companion.`
     );
+  }
+}
+
+/** Load agent-specific env vars, merged on top of process.env. */
+async function loadAgentEnv(agentPaths: AgentPaths): Promise<Record<string, string | undefined>> {
+  try {
+    const content = await fs.readFile(agentPaths.envFile, 'utf-8');
+    return { ...process.env, ...parseEnv(content) };
+  } catch {
+    return { ...process.env };
   }
 }
 
 export async function buildSystemPrompt(
   mode: SessionMode,
+  agentPaths: AgentPaths,
   conversationState?: ConversationState,
 ): Promise<string> {
-  const baseSystemPrompt = await fs.readFile(paths.systemMd(), 'utf-8');
+  const baseSystemPrompt = await fs.readFile(agentPaths.systemMd(), 'utf-8');
   // Both external-outreach and external-reply share system-external.md
   const modeKey = mode.startsWith('external-') ? 'external' : mode;
-  const modeSystemPrompt = await fs.readFile(paths.systemMd(modeKey), 'utf-8').catch(() => '');
+  const modeSystemPrompt = await fs.readFile(agentPaths.systemMd(modeKey), 'utf-8').catch(() => '');
   let systemPromptContent = modeSystemPrompt
     ? `${baseSystemPrompt}\n\n---\n\n${modeSystemPrompt}`
     : baseSystemPrompt;
 
-  // Resolve .fabiana/ references to the actual home path so Fabiana uses correct absolute paths
-  systemPromptContent = systemPromptContent.replaceAll('.fabiana/', `${FABIANA_HOME}/`);
+  // Resolve .fabiana/ references to the actual agent home path
+  systemPromptContent = systemPromptContent.replaceAll('.fabiana/', `${agentPaths.agentHome}/`);
 
-  // Always inject the absolute home path so Fabiana knows where her files live
-  systemPromptContent = `Your home directory is ${FABIANA_HOME}. All your memory, config, and data files live there.\n\n${systemPromptContent}`;
+  // Always inject the absolute home path so the agent knows where its files live
+  systemPromptContent = `Your home directory is ${agentPaths.agentHome}. All your memory, config, and data files live there.\n\n${systemPromptContent}`;
 
   // Inject owner name and conversation purpose into external system prompt
   if (mode.startsWith('external-')) {
-    const identity = await fs.readFile(paths.memory('identity.md'), 'utf-8').catch(() => '');
+    const identity = await fs.readFile(agentPaths.memory('identity.md'), 'utf-8').catch(() => '');
     const ownerNameMatch = identity.match(/(?:my name is|I am|name:\s*)([A-Z][a-z]+)/i);
     const ownerName = ownerNameMatch ? ownerNameMatch[1] : 'the owner';
     systemPromptContent = systemPromptContent.replace('{owner_name}', ownerName);
@@ -94,8 +108,8 @@ export async function buildSystemPrompt(
     systemPromptContent = systemPromptContent.replace('{purpose}', purpose);
   }
 
-  // Append skills section — skills live at ~/.fabiana/skills/, scoped per user
-  const skills = await loadFabianaSkills();
+  // Append skills section
+  const skills = await loadFabianaSkills(agentPaths);
   if (skills.length > 0) {
     systemPromptContent += formatSkillsForPrompt(skills);
   }
@@ -103,7 +117,8 @@ export async function buildSystemPrompt(
   return systemPromptContent;
 }
 
-export async function runPromptPreview(mode: string): Promise<void> {
+export async function runPromptPreview(mode: string, agentPaths?: AgentPaths): Promise<void> {
+  const p = agentPaths ?? createAgentPaths(DEFAULT_AGENT_HOME);
   const bar = '═'.repeat(60);
   try {
     const sessionMode = mode as SessionMode;
@@ -124,8 +139,8 @@ export async function runPromptPreview(mode: string): Promise<void> {
       sessionMode === 'chat' ? '[incoming message — provided at runtime]' : undefined;
 
     const [systemPrompt, ctx] = await Promise.all([
-      buildSystemPrompt(sessionMode),
-      loadContext(sessionMode, incomingMessage, undefined, initiativeOptions, solitudeOptions),
+      buildSystemPrompt(sessionMode, p),
+      loadContext(sessionMode, incomingMessage, undefined, initiativeOptions, solitudeOptions, p),
     ]);
     const userPrompt = buildPrompt(ctx);
 
@@ -171,6 +186,7 @@ export async function runPromptPreview(mode: string): Promise<void> {
 
 export async function runPiSession(
   mode: SessionMode,
+  agentPaths: AgentPaths,
   incomingMessage?: string,
   channel?: ChannelAdapter,
   incomingMsg?: IncomingMessage,
@@ -180,20 +196,20 @@ export async function runPiSession(
   initiativeOptions?: InitiativeOptions,
   solitudeOptions?: SolitudeOptions,
 ): Promise<void> {
-  const logger = Logger.create();
+  const logger = Logger.create(agentPaths.logs);
   const sessionStartTime = Date.now();
 
   try {
     await logger.sessionStart(mode);
-    console.log(`\n🌸 Fabiana [${mode}] - Starting session`);
+    console.log(`\n🌸 [${agentPaths.agentHome}] [${mode}] - Starting session`);
     console.log('━'.repeat(50));
 
     console.log('[1/8] Loading config...');
-    const config = await loadConfig();
+    const config = await loadConfig(agentPaths);
     console.log(`      Model: ${config.model.provider}/${config.model.modelId}`);
 
     console.log('[2/8] Loading permissions...');
-    const permissions = await PermissionValidator.load(paths.manifestJson);
+    const permissions = await PermissionValidator.load(agentPaths.manifestJson);
 
     console.log('[3/8] Initializing pi SDK...');
     const authStorage = AuthStorage.create();
@@ -207,8 +223,8 @@ export async function runPiSession(
     console.log('      ✓ Model loaded');
 
     console.log('[5/8] Loading system prompt...');
-    const systemPromptContent = await buildSystemPrompt(mode, conversationState);
-    const skills = await loadFabianaSkills();
+    const systemPromptContent = await buildSystemPrompt(mode, agentPaths, conversationState);
+    const skills = await loadFabianaSkills(agentPaths);
     if (skills.length > 0) {
       console.log(`      Skills: ${skills.map(s => s.name).join(', ')}`);
     }
@@ -233,9 +249,9 @@ export async function runPiSession(
       }
       // Track all outbound messages as interactions (resets idle clock)
       if (mode !== 'solitude') {
-        await updateLastInteraction();
+        await updateLastInteraction(agentPaths.lastInteractionJson);
       } else {
-        await updateLastSolitude();
+        await updateLastSolitude(agentPaths.lastInteractionJson);
       }
     };
 
@@ -267,7 +283,7 @@ export async function runPiSession(
       conversationManager,
     });
     const bashTool = toolset === 'full' ? createBashTool(process.cwd()) : null;
-    const pluginTools = toolset === 'full' ? await loadPlugins(PLUGINS_DIR) : [];
+    const pluginTools = toolset === 'full' ? await loadPlugins(SHARED_PLUGINS_DIR, agentPaths.pluginsJson) : [];
 
     console.log('[7/8] Creating agent session...');
     const { session } = await createAgentSession({
@@ -278,7 +294,7 @@ export async function runPiSession(
       modelRegistry,
       resourceLoader: loader,
       customTools: [...fabianaTools, ...(bashTool ? [bashTool] : []), ...pluginTools],
-      sessionManager: SessionManager.create(process.cwd(), paths.sessions),
+      sessionManager: SessionManager.create(process.cwd(), agentPaths.sessions),
     });
     console.log('      ✓ Session created');
 
@@ -327,7 +343,7 @@ export async function runPiSession(
     });
 
     console.log('\n📚 Loading context...');
-    const context = await loadContext(mode, incomingMessage, conversationState, initiativeOptions, solitudeOptions);
+    const context = await loadContext(mode, incomingMessage, conversationState, initiativeOptions, solitudeOptions, agentPaths);
     const prompt = buildPrompt(context);
     console.log(`      Context loaded: ${prompt.length} chars`);
 
@@ -378,7 +394,7 @@ export async function runPiSession(
       const timestamp = new Date().toISOString();
       const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
       try {
-        await fs.appendFile(paths.logs('initiative-silence.log'), entry, 'utf-8');
+        await fs.appendFile(agentPaths.logs('initiative-silence.log'), entry, 'utf-8');
       } catch (err: any) {
         console.error('❌ Failed to write silence log:', err.message);
       }
@@ -389,7 +405,7 @@ export async function runPiSession(
       const timestamp = new Date().toISOString();
       const entry = `\n--- ${timestamp} ---\n${accumulatedResponse.trim()}\n`;
       try {
-        await fs.appendFile(paths.logs('solitude.log'), entry, 'utf-8');
+        await fs.appendFile(agentPaths.logs('solitude.log'), entry, 'utf-8');
       } catch (err: any) {
         console.error('❌ Failed to write solitude log:', err.message);
       }
@@ -468,8 +484,8 @@ function pickStartupMessage(toneKey: string): string {
   return bucket[Math.floor(Math.random() * bucket.length)];
 }
 
-async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void> {
-  const statePath = paths.stateJson;
+async function sendStartupMessage(primaryChannel: ChannelAdapter, agentPaths: AgentPaths, config: Config): Promise<void> {
+  const statePath = agentPaths.stateJson;
   let state: { introduced: boolean; userName: string; botName: string; toneKey: string };
 
   try {
@@ -482,7 +498,6 @@ async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void>
   if (!state.introduced) {
     console.log('\n💌 First run — sending intro message...');
     try {
-      const config = await loadConfig();
       const authStorage = AuthStorage.create();
       const modelRegistry = new ModelRegistry(authStorage);
       const model = getModel(config.model.provider as any, config.model.modelId);
@@ -506,7 +521,7 @@ async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void>
         modelRegistry,
         resourceLoader: loader,
         customTools: [],
-        sessionManager: SessionManager.create(process.cwd(), paths.sessions),
+        sessionManager: SessionManager.create(process.cwd(), agentPaths.sessions),
       });
 
       let introText = '';
@@ -543,19 +558,30 @@ async function sendStartupMessage(primaryChannel: ChannelAdapter): Promise<void>
   }
 }
 
-export async function startDaemon(): Promise<void> {
-  console.log('\n🌸 Fabiana - Virtual Life Companion');
+// ─── Per-agent daemon loop ────────────────────────────────────────────────────
+
+async function startAgentLoop(agentName: string): Promise<void> {
+  const agentHome = resolveAgentHome(agentName);
+  const agentPaths = createAgentPaths(agentHome);
+
+  console.log(`\n🌸 [${agentName}] Starting agent loop (home: ${agentHome})`);
   console.log('━'.repeat(50));
 
-  const config = await loadConfig();
-  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
-  const conversationManager = new ConversationManager();
+  // Init DB for this agent
+  initDb(agentPaths.memoryDb);
+
+  // Load agent-specific env vars (credentials, API keys)
+  const agentEnv = await loadAgentEnv(agentPaths);
+
+  const config = await loadConfig(agentPaths);
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels, agentEnv);
+  const conversationManager = new ConversationManager(agentPaths.conversations);
 
   for (const ch of channels) {
     await ch.start();
   }
 
-  await sendStartupMessage(primaryChannel);
+  await sendStartupMessage(primaryChannel, agentPaths, config);
 
   /**
    * Schedules a recurring task with ±jitterMinutes random variation per invocation.
@@ -584,32 +610,32 @@ export async function startDaemon(): Promise<void> {
   const initiative = config.initiative;
   if (initiative.enabled) {
     const intervalMinutes = initiative.checkIntervalMinutes ?? 30;
-    console.log(`[INIT] Initiative checks every ~${intervalMinutes}min ±15min (active ${initiative.activeHoursStart}:00–${initiative.activeHoursEnd}:00)`);
+    console.log(`[${agentName}] Initiative checks every ~${intervalMinutes}min ±15min (active ${initiative.activeHoursStart}:00–${initiative.activeHoursEnd}:00)`);
 
     scheduleWithJitter(intervalMinutes, 15, async () => {
       const hour = new Date().getHours();
       if (hour < initiative.activeHoursStart || hour >= initiative.activeHoursEnd) {
-        console.log(`\n🌱 [SCHEDULED] Initiative skipped — outside active hours (${hour}:00)`);
+        console.log(`\n🌱 [${agentName}] Initiative skipped — outside active hours (${hour}:00)`);
         return;
       }
 
       // Gate: skip if last interaction was too recent
-      const hoursSinceInteraction = await getLastInteractionHoursAgo();
+      const hoursSinceInteraction = await getLastInteractionHoursAgo(agentPaths.lastInteractionJson);
       if (hoursSinceInteraction !== null && hoursSinceInteraction < initiative.minHoursBetweenMessages) {
-        console.log(`\n🌱 [SCHEDULED] Initiative skipped — last interaction ${hoursSinceInteraction.toFixed(1)}h ago (min: ${initiative.minHoursBetweenMessages}h)`);
+        console.log(`\n🌱 [${agentName}] Initiative skipped — last interaction ${hoursSinceInteraction.toFixed(1)}h ago (min: ${initiative.minHoursBetweenMessages}h)`);
         return;
       }
 
-      console.log('\n🌱 [SCHEDULED] Running initiative check...');
+      console.log(`\n🌱 [${agentName}] Running initiative check...`);
       try {
-        const mood = await loadMood();
+        const mood = await loadMood(agentPaths.moodMd);
         const { type: selectedType, reason } = selectInitiativeType(mood, hoursSinceInteraction);
         const typeInstruction = TYPE_INSTRUCTIONS[selectedType];
         console.log(`      🎯 Type: ${selectedType} (${reason})`);
-        await runPiSession('initiative', undefined, primaryChannel, undefined, undefined, channels, conversationManager, { type: selectedType, typeInstruction });
-        console.log('✅ [SCHEDULED] Initiative complete');
+        await runPiSession('initiative', agentPaths, undefined, primaryChannel, undefined, undefined, channels, conversationManager, { type: selectedType, typeInstruction });
+        console.log(`✅ [${agentName}] Initiative complete`);
       } catch (err: any) {
-        console.error('❌ [SCHEDULED] Initiative failed:', err.message);
+        console.error(`❌ [${agentName}] Initiative failed:`, err.message);
       }
     });
   }
@@ -619,7 +645,7 @@ export async function startDaemon(): Promise<void> {
     const solitudeInterval = solitude.checkIntervalMinutes ?? 30;
     const minIdleHours = solitude.minIdleHours ?? 1;
     const minCooldownHours = solitude.minCooldownHours ?? 2;
-    console.log(`[INIT] Solitude checks every ~${solitudeInterval}min ±15min (idle>${minIdleHours}h, cooldown>${minCooldownHours}h, active ${solitude.activeHoursStart}:00–${solitude.activeHoursEnd}:00)`);
+    console.log(`[${agentName}] Solitude checks every ~${solitudeInterval}min ±15min (idle>${minIdleHours}h, cooldown>${minCooldownHours}h, active ${solitude.activeHoursStart}:00–${solitude.activeHoursEnd}:00)`);
 
     scheduleWithJitter(solitudeInterval, 15, async () => {
       const hour = new Date().getHours();
@@ -627,42 +653,39 @@ export async function startDaemon(): Promise<void> {
         return;
       }
 
-      const hoursSinceInteraction = await getLastInteractionHoursAgo();
-      const hoursSinceSolitude = await getLastSolitudeHoursAgo();
+      const hoursSinceInteraction = await getLastInteractionHoursAgo(agentPaths.lastInteractionJson);
+      const hoursSinceSolitude = await getLastSolitudeHoursAgo(agentPaths.lastInteractionJson);
 
-      // Only enter solitude if idle long enough
       if (hoursSinceInteraction !== null && hoursSinceInteraction < minIdleHours) {
         return;
       }
 
-      // Respect cooldown between solitude sessions
       if (hoursSinceSolitude !== null && hoursSinceSolitude < minCooldownHours) {
-        console.log(`\n🌿 [SCHEDULED] Solitude skipped — last solitude ${hoursSinceSolitude.toFixed(1)}h ago (cooldown: ${minCooldownHours}h)`);
+        console.log(`\n🌿 [${agentName}] Solitude skipped — last solitude ${hoursSinceSolitude.toFixed(1)}h ago (cooldown: ${minCooldownHours}h)`);
         return;
       }
 
-      console.log('\n🌿 [SCHEDULED] Entering solitude...');
+      console.log(`\n🌿 [${agentName}] Entering solitude...`);
       try {
         const selectedType = ALL_SOLITUDE_TYPES[Math.floor(Math.random() * ALL_SOLITUDE_TYPES.length)];
         const typeInstruction = SOLITUDE_TYPE_INSTRUCTIONS[selectedType as SolitudeType];
         console.log(`      🌿 Type: ${selectedType}`);
-        await runPiSession('solitude', undefined, primaryChannel, undefined, undefined, channels, conversationManager, undefined, { type: selectedType, typeInstruction });
-        // Always update lastSolitude after a session, even if no message was sent
-        await updateLastSolitude();
-        console.log('✅ [SCHEDULED] Solitude complete');
+        await runPiSession('solitude', agentPaths, undefined, primaryChannel, undefined, undefined, channels, conversationManager, undefined, { type: selectedType, typeInstruction });
+        await updateLastSolitude(agentPaths.lastInteractionJson);
+        console.log(`✅ [${agentName}] Solitude complete`);
       } catch (err: any) {
-        console.error('❌ [SCHEDULED] Solitude failed:', err.message);
+        console.error(`❌ [${agentName}] Solitude failed:`, err.message);
       }
     });
   }
 
   cron.schedule('0 0 * * *', async () => {
-    console.log('\n🌙 [SCHEDULED] Running midnight consolidation...');
+    console.log(`\n🌙 [${agentName}] Running midnight consolidation...`);
     try {
-      await runPiSession('consolidate', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
-      console.log('✅ [SCHEDULED] Consolidation complete');
+      await runPiSession('consolidate', agentPaths, undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+      console.log(`✅ [${agentName}] Consolidation complete`);
     } catch (err: any) {
-      console.error('❌ [SCHEDULED] Consolidation failed:', err.message);
+      console.error(`❌ [${agentName}] Consolidation failed:`, err.message);
     }
   });
 
@@ -671,25 +694,24 @@ export async function startDaemon(): Promise<void> {
     try {
       const expired = await conversationManager.expireStale();
       for (const conv of expired) {
-        console.log(`\n⏳ External conversation expired: ${conv.id}`);
+        console.log(`\n⏳ [${agentName}] External conversation expired: ${conv.id}`);
         try {
           await primaryChannel.send(
-            `My conversation with **${conv.externalDisplayName}** about "${conv.purpose}" has gone quiet for 4 days. Want me to follow up?`
+            `📬 My conversation with **${conv.externalDisplayName}** about "${conv.purpose}" has gone quiet for 4 days. Want me to follow up?`
           );
         } catch (err: any) {
-          console.error(`❌ Failed to notify about expired conversation ${conv.id}:`, err.message);
+          console.error(`❌ [${agentName}] Failed to notify about expired conversation ${conv.id}:`, err.message);
         }
       }
     } catch (err: any) {
-      console.error('❌ [SCHEDULED] Expiry check failed:', err.message);
+      console.error(`❌ [${agentName}] Expiry check failed:`, err.message);
     }
   });
 
-  console.log('👂 Listening for messages...');
-  console.log(`🌱 Initiative: every ${config.initiative.checkIntervalMinutes}min (${config.initiative.activeHoursStart}:00–${config.initiative.activeHoursEnd}:00)`);
-  console.log('🌙 Consolidation: midnight daily');
-  console.log(`📡 Active channels: ${channels.map((c) => c.name).join(', ')} (primary: ${primaryChannel.name})`);
-  console.log('Press Ctrl+C to stop\n');
+  console.log(`[${agentName}] 👂 Listening for messages...`);
+  console.log(`[${agentName}] 🌱 Initiative: every ${config.initiative.checkIntervalMinutes}min (${config.initiative.activeHoursStart}:00–${config.initiative.activeHoursEnd}:00)`);
+  console.log(`[${agentName}] 🌙 Consolidation: midnight daily`);
+  console.log(`[${agentName}] 📡 Active channels: ${channels.map((c) => c.name).join(', ')} (primary: ${primaryChannel.name})`);
 
   const processLoop = async () => {
     let tickCount = 0;
@@ -706,28 +728,28 @@ export async function startDaemon(): Promise<void> {
           // Non-owner message — look up an active external conversation
           const conv = await conversationManager.find(msg.source, msg.senderId, msg.threadId ?? '');
           if (!conv) {
-            console.log(`\n⚠️  Unknown external message from ${msg.senderId} on ${msg.source}`);
+            console.log(`\n⚠️  [${agentName}] Unknown external message from ${msg.senderId} on ${msg.source}`);
             await primaryChannel.send(
               `📬 Unknown message from \`${msg.senderId}\` on ${msg.source}:\n> ${msg.text.slice(0, 200)}\n\nNo active conversation found. Use \`start_external_conversation\` if you want to engage.`
             );
             continue;
           }
-          console.log(`\n📨 [${msg.source}] External reply from ${conv.externalDisplayName}: "${msg.text.slice(0, 50)}..."`);
+          console.log(`\n📨 [${agentName}][${msg.source}] External reply from ${conv.externalDisplayName}: "${msg.text.slice(0, 50)}..."`);
           await conversationManager.append(conv.id, conv.externalDisplayName, msg.text);
           try {
-            await runPiSession('external-reply', msg.text, msgChannel, msg, conv, channels, conversationManager);
+            await runPiSession('external-reply', agentPaths, msg.text, msgChannel, msg, conv, channels, conversationManager);
           } catch (err: any) {
-            console.error('   ❌ External reply session error:', err.message);
+            console.error(`   ❌ [${agentName}] External reply session error:`, err.message);
           }
         } else {
           // Owner message — full chat session on the channel it arrived on
-          console.log(`\n📨 [${msg.source}] Message: "${msg.text.slice(0, 50)}..."`);
+          console.log(`\n📨 [${agentName}][${msg.source}] Message: "${msg.text.slice(0, 50)}..."`);
           await msgChannel.logConversation('user', msg.text, msg.source);
-          await updateLastInteraction();
+          await updateLastInteraction(agentPaths.lastInteractionJson);
           try {
-            await runPiSession('chat', msg.text, msgChannel, msg, undefined, channels, conversationManager);
+            await runPiSession('chat', agentPaths, msg.text, msgChannel, msg, undefined, channels, conversationManager);
           } catch (err: any) {
-            console.error('   ❌ Session error:', err.message);
+            console.error(`   ❌ [${agentName}] Session error:`, err.message);
           }
         }
       }
@@ -739,23 +761,50 @@ export async function startDaemon(): Promise<void> {
   };
 
   processLoop().catch(console.error);
+}
+
+// ─── Public daemon entry points ───────────────────────────────────────────────
+
+export async function startDaemon(agentFilter?: string): Promise<void> {
+  console.log('\n🌸 Fabiana - Virtual Life Companion');
+  console.log('━'.repeat(50));
+
+  const agentNames = await listAgents();
+
+  if (agentNames.length === 0) {
+    throw new Error("No agents configured. Run 'fabiana init' to set up your first companion.");
+  }
+
+  const toStart = agentFilter ? [agentFilter] : agentNames;
+
+  if (toStart.length === 1) {
+    console.log(`Starting agent: ${toStart[0]}`);
+  } else {
+    console.log(`Starting ${toStart.length} agents: ${toStart.join(', ')}`);
+  }
+
+  console.log('Press Ctrl+C to stop\n');
 
   process.on('SIGINT', async () => {
     console.log('\n\n👋 Shutting down...');
-    for (const ch of channels) {
-      await ch.stop();
-    }
     process.exit(0);
   });
+
+  // Run all agent loops concurrently — each is fully isolated
+  await Promise.all(toStart.map((name) => startAgentLoop(name)));
 }
 
-export async function runInitiativeOnce(forcedType?: string, dryRun = false): Promise<void> {
+export async function runInitiativeOnce(forcedType?: string, dryRun = false, agentName?: string): Promise<void> {
   console.log('\n🌸 Fabiana - Initiative check');
   console.log('━'.repeat(50));
 
+  const agentHome = resolveAgentHome(agentName ?? 'default');
+  const agentPaths = createAgentPaths(agentHome);
+  const agentEnv = await loadAgentEnv(agentPaths);
+
   // Resolve initiative type — forced via CLI or auto-selected by trigger engine
-  const mood = await loadMood();
-  const hoursSince = await getLastInteractionHoursAgo();
+  const mood = await loadMood(agentPaths.moodMd);
+  const hoursSince = await getLastInteractionHoursAgo(agentPaths.lastInteractionJson);
 
   let selectedType: string;
   let selectionReason: string;
@@ -791,13 +840,14 @@ export async function runInitiativeOnce(forcedType?: string, dryRun = false): Pr
     return;
   }
 
-  const config = await loadConfig();
-  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  const config = await loadConfig(agentPaths);
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels, agentEnv);
   for (const ch of channels) await ch.start();
-  const conversationManager = new ConversationManager();
+  const conversationManager = new ConversationManager(agentPaths.conversations);
 
   await runPiSession(
     'initiative',
+    agentPaths,
     undefined,
     primaryChannel,
     undefined,
@@ -811,22 +861,30 @@ export async function runInitiativeOnce(forcedType?: string, dryRun = false): Pr
   process.exit(0);
 }
 
-export async function runConsolidateOnce(): Promise<void> {
+export async function runConsolidateOnce(agentName?: string): Promise<void> {
   console.log('\n🌸 Fabiana - Memory consolidation');
   console.log('━'.repeat(50));
 
-  const config = await loadConfig();
-  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  const agentHome = resolveAgentHome(agentName ?? 'default');
+  const agentPaths = createAgentPaths(agentHome);
+  const agentEnv = await loadAgentEnv(agentPaths);
+
+  const config = await loadConfig(agentPaths);
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels, agentEnv);
   for (const ch of channels) await ch.start();
-  const conversationManager = new ConversationManager();
-  await runPiSession('consolidate', undefined, primaryChannel, undefined, undefined, channels, conversationManager);
+  const conversationManager = new ConversationManager(agentPaths.conversations);
+  await runPiSession('consolidate', agentPaths, undefined, primaryChannel, undefined, undefined, channels, conversationManager);
   for (const ch of channels) await ch.stop();
   process.exit(0);
 }
 
-export async function runSolitudeOnce(forcedType?: string, dryRun = false): Promise<void> {
+export async function runSolitudeOnce(forcedType?: string, dryRun = false, agentName?: string): Promise<void> {
   console.log('\n🌸 Fabiana - Solitude');
   console.log('━'.repeat(50));
+
+  const agentHome = resolveAgentHome(agentName ?? 'default');
+  const agentPaths = createAgentPaths(agentHome);
+  const agentEnv = await loadAgentEnv(agentPaths);
 
   let selectedType: string;
 
@@ -839,7 +897,6 @@ export async function runSolitudeOnce(forcedType?: string, dryRun = false): Prom
     selectedType = forcedType;
     console.log(`\n🌿 Solitude type: ${selectedType} (forced via CLI)`);
   } else {
-    // Pick randomly
     selectedType = ALL_SOLITUDE_TYPES[Math.floor(Math.random() * ALL_SOLITUDE_TYPES.length)];
     console.log(`\n🌿 Solitude type: ${selectedType} (random)`);
   }
@@ -853,13 +910,14 @@ export async function runSolitudeOnce(forcedType?: string, dryRun = false): Prom
     return;
   }
 
-  const config = await loadConfig();
-  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels);
+  const config = await loadConfig(agentPaths);
+  const { all: channels, primary: primaryChannel } = await loadChannels(config.channels, agentEnv);
   for (const ch of channels) await ch.start();
-  const conversationManager = new ConversationManager();
+  const conversationManager = new ConversationManager(agentPaths.conversations);
 
   await runPiSession(
     'solitude',
+    agentPaths,
     undefined,
     primaryChannel,
     undefined,

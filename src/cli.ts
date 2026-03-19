@@ -1,10 +1,10 @@
 import { config as dotenvConfig } from 'dotenv';
 import { paths } from './paths.js';
-dotenvConfig({ path: paths.envFile }); // ~/.fabiana/.env (production)
+dotenvConfig({ path: paths.envFile }); // default agent .env (backward compat / dev)
 dotenvConfig();                         // .env in cwd (dev fallback)
 
 import { initDb } from './db/init.js';
-initDb();
+initDb(); // init default agent DB (backward compat; each agent loop re-inits its own)
 
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -21,6 +21,8 @@ import { runSetup } from './setup/index.js';
 import { runSync } from './sync-cmd.js';
 import { providerStatus, providerUse, providerAdd } from './provider-cmd.js';
 import { modelStatus, modelUse, modelTest } from './model-cmd.js';
+import { listAgents, addAgent, removeAgent, migrateToMultiAgent } from './agent-registry.js';
+import { getAgentHome, createAgentPaths } from './paths.js';
 
 const C = '\x1b[96m';   // cyan — name
 const D = '\x1b[2m';    // dim  — subtitle
@@ -57,7 +59,11 @@ program
 program
   .command('init')
   .description('First time? Let\'s get acquainted')
-  .action(runSetup);
+  .option('-a, --agent <name>', 'name of the agent to initialise (default: "default")')
+  .action((opts: { agent?: string }) => {
+    const agentHome = opts.agent ? getAgentHome(opts.agent) : undefined;
+    runSetup(agentHome);
+  });
 
 program
   .command('sync')
@@ -67,33 +73,38 @@ program
 program
   .command('start')
   .description('Wake her up — she\'ll take it from there')
-  .action(startDaemon);
+  .argument('[agent]', 'start a specific agent by name (default: all configured agents)')
+  .action((agentArg?: string) => startDaemon(agentArg));
 
 program
   .command('initiative [type]')
   .description('Make her think. Just once. Optionally force a type (e.g. bored, observation, btw_news)')
   .option('-d, --dry-run', 'show selected type and instruction without running the agent')
-  .action((type: string | undefined, opts: { dryRun?: boolean }) => {
-    runInitiativeOnce(type, opts.dryRun ?? false);
+  .option('-a, --agent <name>', 'which agent to use (default: "default")')
+  .action((type: string | undefined, opts: { dryRun?: boolean; agent?: string }) => {
+    runInitiativeOnce(type, opts.dryRun ?? false, opts.agent);
   });
 
 program
   .command('consolidate')
   .description('Tidy up the mind palace')
-  .action(runConsolidateOnce);
+  .option('-a, --agent <name>', 'which agent to use (default: "default")')
+  .action((opts: { agent?: string }) => runConsolidateOnce(opts.agent));
 
 program
   .command('solitude [type]')
   .description('Give her time to herself. Optionally specify a type: reflection, deep_dive, news_curation, memory_housekeeping, creative')
   .option('-d, --dry-run', 'show selected type and instruction without running')
-  .action((type: string | undefined, opts: { dryRun?: boolean }) => {
-    runSolitudeOnce(type, opts.dryRun ?? false);
+  .option('-a, --agent <name>', 'which agent to use (default: "default")')
+  .action((type: string | undefined, opts: { dryRun?: boolean; agent?: string }) => {
+    runSolitudeOnce(type, opts.dryRun ?? false, opts.agent);
   });
 
 program
   .command('prompt-preview [mode]')
   .description('Preview the combined system prompt for a mode')
-  .action(async (mode?: string) => {
+  .option('-a, --agent <name>', 'which agent to use (default: "default")')
+  .action(async (mode?: string, opts: { agent?: string } = {}) => {
     if (!mode) {
       const { select } = await import('@inquirer/prompts');
       mode = await select({
@@ -107,21 +118,28 @@ program
         ],
       });
     }
-    runPromptPreview(mode);
+    const agentPaths = opts.agent
+      ? createAgentPaths(getAgentHome(opts.agent))
+      : undefined;
+    runPromptPreview(mode, agentPaths);
   });
 
 program
   .command('config')
   .description('Tweak her settings (opens config.json in your editor)')
-  .action(() => {
+  .option('-a, --agent <name>', 'which agent\'s config to edit (default: "default")')
+  .action((opts: { agent?: string }) => {
+    const p = opts.agent ? createAgentPaths(getAgentHome(opts.agent)) : paths;
     const editor = process.env.EDITOR ?? process.env.VISUAL ?? 'vi';
-    spawnSync(editor, [paths.configJson], { stdio: 'inherit' });
+    spawnSync(editor, [p.configJson], { stdio: 'inherit' });
   });
 
 program
   .command('system-prompt')
   .description('Edit her system prompts — choose the mode')
-  .action(async () => {
+  .option('-a, --agent <name>', 'which agent\'s prompts to edit (default: "default")')
+  .action(async (opts: { agent?: string }) => {
+    const p = opts.agent ? createAgentPaths(getAgentHome(opts.agent)) : paths;
     const { select } = await import('@inquirer/prompts');
     const choice = await select({
       message: 'Which system prompt do you want to edit?',
@@ -134,9 +152,17 @@ program
         { name: 'external     — external mode override', value: 'external' },
       ],
     });
-    const file = choice === 'system' ? paths.systemMd() : paths.systemMd(choice);
+    const file = choice === 'system' ? p.systemMd() : p.systemMd(choice);
     const editor = process.env.EDITOR ?? process.env.VISUAL ?? 'vi';
     spawnSync(editor, [file], { stdio: 'inherit' });
+  });
+
+program
+  .command('migrate')
+  .description('Migrate single-agent layout (~/.fabiana/) to multi-agent layout (~/.fabiana/agents/default/)')
+  .action(async () => {
+    const migrated = await migrateToMultiAgent();
+    if (!migrated) process.exit(1);
   });
 
 program
@@ -156,6 +182,54 @@ program
   .option('-f, --force', 'skip confirmation prompt if data directory exists')
   .action((filepath, opts) => runRestore(filepath, opts));
 
+// ─── agent subcommand ─────────────────────────────────────────────────────────
+
+const agent = new Command('agent').description('Manage multiple agents');
+
+agent
+  .command('list')
+  .description('List all configured agents')
+  .action(async () => {
+    const names = await listAgents();
+    if (names.length === 0) {
+      console.log('No agents configured. Run `fabiana init` to create one.');
+      return;
+    }
+    console.log('\nConfigured agents:');
+    for (const name of names) {
+      const home = getAgentHome(name);
+      console.log(`  • ${name}  ${D}(${home})${R}`);
+    }
+    console.log();
+  });
+
+agent
+  .command('add <name>')
+  .description('Scaffold a new agent and run interactive setup')
+  .action(async (name: string) => {
+    await addAgent(name);
+    console.log(`\nAgent "${name}" registered.`);
+    console.log(`Running setup for ${name}...\n`);
+    await runSetup(getAgentHome(name));
+  });
+
+agent
+  .command('remove <name>')
+  .description('Remove an agent from the registry (does not delete files)')
+  .action(async (name: string) => {
+    if (name === 'default') {
+      console.error('Cannot remove the default agent from the registry.');
+      process.exit(1);
+    }
+    await removeAgent(name);
+    console.log(`Agent "${name}" removed from registry.`);
+    console.log(`${D}Files at ${getAgentHome(name)} were not deleted.${R}`);
+  });
+
+program.addCommand(agent);
+
+// ─── plugins subcommand ───────────────────────────────────────────────────────
+
 const plugins = new Command('plugins').description('Teach her new tricks');
 
 plugins
@@ -169,6 +243,8 @@ plugins
   .action(pluginsList);
 
 program.addCommand(plugins);
+
+// ─── skills subcommand ────────────────────────────────────────────────────────
 
 const skills = new Command('skills').description('Teach her new workflows');
 
@@ -199,6 +275,8 @@ skills
 
 program.addCommand(skills);
 
+// ─── provider subcommand ──────────────────────────────────────────────────────
+
 const provider = new Command('provider').description('Manage AI providers');
 
 provider
@@ -216,6 +294,8 @@ provider
 
 program.addCommand(provider);
 
+// ─── model subcommand ─────────────────────────────────────────────────────────
+
 const model = new Command('model').description('Manage the active model');
 
 model
@@ -232,6 +312,8 @@ model
   .action(modelStatus);
 
 program.addCommand(model);
+
+// ─── db subcommand ────────────────────────────────────────────────────────────
 
 const db = new Command('db').description('Manage the memory database');
 

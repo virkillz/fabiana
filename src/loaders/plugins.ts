@@ -1,7 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
-import { PLUGINS_DIR, paths } from '../paths.js';
+import { SHARED_PLUGINS_DIR, paths } from '../paths.js';
+
+// Re-export for callers that use the legacy name
+export { SHARED_PLUGINS_DIR as PLUGINS_DIR };
 
 export interface PluginMetadata {
   name: string;
@@ -22,7 +25,7 @@ export class PluginLoader {
   private pluginsDir: string;
   private enabledPlugins: Set<string> | null = null;
 
-  constructor(pluginsDir: string = PLUGINS_DIR) {
+  constructor(pluginsDir: string = SHARED_PLUGINS_DIR) {
     this.pluginsDir = path.resolve(pluginsDir);
   }
 
@@ -97,7 +100,8 @@ export class PluginLoader {
     return tools;
   }
 
-  async loadPluginConfig(configPath: string = paths.pluginsJson): Promise<void> {
+  async loadPluginConfig(configPath?: string): Promise<void> {
+    configPath = configPath ?? paths.pluginsJson;
     try {
       const content = await fs.readFile(configPath, 'utf-8');
       const config: PluginsConfig = JSON.parse(content);
@@ -114,9 +118,9 @@ export class PluginLoader {
   }
 }
 
-export async function loadPlugins(pluginsDir?: string): Promise<ToolDefinition[]> {
+export async function loadPlugins(pluginsDir?: string, pluginsConfigPath?: string): Promise<ToolDefinition[]> {
   const loader = new PluginLoader(pluginsDir);
-  await loader.loadPluginConfig();
+  await loader.loadPluginConfig(pluginsConfigPath);
   return loader.loadAll();
 }
 

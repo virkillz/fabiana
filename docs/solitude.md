@@ -87,7 +87,7 @@ Output goes to `data/memory/self/` — it's hers. If what she produced is genuin
 
 ## System prompt
 
-The solitude mode system prompt lives at `~/.fabiana/config/system-solitude.md`. It loads on top of the base `system.md`. To edit it:
+The solitude mode system prompt lives at `<agent-home>/config/system-solitude.md` (e.g. `~/.fabiana/agents/default/config/system-solitude.md`). It loads on top of the base `system.md`. To edit it:
 
 ```
 fabiana system-prompt
@@ -125,7 +125,7 @@ In `config.json`:
 - Arif sends a message (any channel)
 - Fabiana sends a message in chat or initiative mode
 
-`last_solitude` is updated after every completed solitude session, whether or not a message was sent. Both timestamps live in `~/.fabiana/data/last_interaction.json`.
+`last_solitude` is updated after every completed solitude session, whether or not a message was sent. Both timestamps live in `<agent-home>/data/last_interaction.json`.
 
 ---
 

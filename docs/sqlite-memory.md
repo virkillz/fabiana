@@ -15,7 +15,7 @@ The current file-based memory system works but has hard limits:
 - Mood is a single snapshot, not a history
 - Promoting a memory from warm→hot requires manually moving a file
 
-SQLite solves all of these. It's a single file at `~/.fabiana/data/memory.db`, the agent queries it with the `sqlite3` CLI, and a skill teaches her how.
+SQLite solves all of these. It's a single file at `<agent-home>/data/memory.db` (e.g. `~/.fabiana/agents/default/data/memory.db`), the agent queries it with the `sqlite3` CLI, and a skill teaches her how.
 
 The flat files for `identity.md` and `core.md` stay — they still load directly into the hot prompt. SQLite handles everything else: search, aggregation, people, events, mood history, and conversation indexing.
 

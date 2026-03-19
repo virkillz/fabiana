@@ -32,9 +32,9 @@ function computeDecayedIntensity(raw: string): number {
   return Math.min(1, intensity);
 }
 
-export async function loadMood(): Promise<MoodState> {
+export async function loadMood(moodMdPath?: string): Promise<MoodState> {
   try {
-    const raw = await fs.readFile(paths.moodMd, 'utf-8');
+    const raw = await fs.readFile(moodMdPath ?? paths.moodMd, 'utf-8');
     return {
       current: parseMoodCurrent(raw),
       intensity: computeDecayedIntensity(raw),

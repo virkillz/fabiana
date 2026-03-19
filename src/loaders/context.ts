@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import type { ConversationState } from '../conversations/types.js';
-import { paths } from '../paths.js';
+import { paths, type AgentPaths } from '../paths.js';
 
 export type SessionMode =
   | 'chat'
@@ -29,6 +29,8 @@ export interface FabianaContext {
   // Solitude-specific
   solitudeType?: string;
   solitudeTypeInstruction?: string;
+  // Agent paths — kept for use in buildPrompt log reference
+  _paths: AgentPaths;
 }
 
 export interface InitiativeOptions {
@@ -47,19 +49,21 @@ export async function loadContext(
   conversationState?: ConversationState,
   initiativeOptions?: InitiativeOptions,
   solitudeOptions?: SolitudeOptions,
+  agentPaths?: AgentPaths,
 ): Promise<FabianaContext> {
+  const p = agentPaths ?? paths;
   const timestamp = new Date().toISOString();
   const today = timestamp.slice(0, 10);
 
-  const identity = await readFile(paths.memory('identity.md'), '(No identity file yet)');
-  const core = await readFile(paths.memory('core.md'), '(No core memory yet)');
-  const recentMemory = await readFile(paths.memory('recent', 'this-week.md'), '(No recent memory yet)');
-  const rawLog = await readFile(paths.logs(`conversation-${today}.log`), '');
-  const todayLog = tailLines(rawLog, TODAY_LOG_MAX_LINES);
+  const identity     = await readFile(p.memory('identity.md'), '(No identity file yet)');
+  const core         = await readFile(p.memory('core.md'), '(No core memory yet)');
+  const recentMemory = await readFile(p.memory('recent', 'this-week.md'), '(No recent memory yet)');
+  const rawLog       = await readFile(p.logs(`conversation-${today}.log`), '');
+  const todayLog     = tailLines(rawLog, TODAY_LOG_MAX_LINES, p, today);
 
   let mood: string | undefined;
   if (mode === 'initiative' || mode === 'solitude') {
-    mood = await readFile(paths.moodMd, '');
+    mood = await readFile(p.moodMd, '');
   }
 
   return {
@@ -76,6 +80,7 @@ export async function loadContext(
     mood,
     solitudeType: solitudeOptions?.type,
     solitudeTypeInstruction: solitudeOptions?.typeInstruction,
+    _paths: p,
   };
 }
 
@@ -87,12 +92,12 @@ async function readFile(filePath: string, fallback: string): Promise<string> {
   }
 }
 
-function tailLines(text: string, maxLines: number): string {
+function tailLines(text: string, maxLines: number, p: AgentPaths, today: string): string {
   if (!text) return '';
   const lines = text.split('\n').filter(l => l.trim());
   if (lines.length <= maxLines) return lines.join('\n');
   const omitted = lines.length - maxLines;
-  return `(${omitted} earlier lines omitted — full log in ${paths.logs('conversation-' + new Date().toISOString().slice(0, 10) + '.log')})\n...\n` + lines.slice(-maxLines).join('\n');
+  return `(${omitted} earlier lines omitted — full log in ${p.logs(`conversation-${today}.log`)})\n...\n` + lines.slice(-maxLines).join('\n');
 }
 
 export function buildPrompt(ctx: FabianaContext): string {

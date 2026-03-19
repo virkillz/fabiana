@@ -3,7 +3,8 @@ import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
 import { providers } from '../data/providers.js';
-import { paths, PLUGINS_DIR, SKILLS_DIR, CONFIG_DIR, DATA_DIR, BUNDLED_PLUGINS_DIR, BUNDLED_SKILLS_DIR, PACKAGE_ROOT } from '../paths.js';
+import { createAgentPaths, DEFAULT_AGENT_HOME, SHARED_PLUGINS_DIR, SHARED_SKILLS_DIR, BUNDLED_PLUGINS_DIR, BUNDLED_SKILLS_DIR, PACKAGE_ROOT } from '../paths.js';
+import { addAgent } from '../agent-registry.js';
 import { systemPromptTemplate } from '../prompts/system.js';
 import { systemChatTemplate } from '../prompts/system-chat.js';
 import { systemInitiativeTemplate } from '../prompts/system-initiative.js';
@@ -93,7 +94,11 @@ function note(label: string, value: string) {
   console.log(`  ${chalk.bold(label.padEnd(12))} ${value}`);
 }
 
-export async function runSetup(): Promise<void> {
+export async function runSetup(agentHome?: string): Promise<void> {
+  const home = agentHome ?? DEFAULT_AGENT_HOME;
+  const p = createAgentPaths(home);
+  const configDir = path.join(home, 'config');
+  const dataDir   = path.join(home, 'data');
   console.clear();
   console.log(chalk.bold.magenta('\n  ✦  Welcome to Fabiana'));
   console.log(chalk.dim("  Your AI companion is almost alive. Let's make it yours.\n"));
@@ -241,19 +246,19 @@ export async function runSetup(): Promise<void> {
     tone_chat_guidance: tone.chatGuidance,
   };
 
-  await fs.mkdir(CONFIG_DIR, { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'memory', 'recent'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'memory', 'people'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'memory', 'dates'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'memory', 'interests'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'memory', 'diary'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'pending'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'scheduled'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'agent-todo', 'completed'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'logs'), { recursive: true });
-  await fs.mkdir(path.join(DATA_DIR, 'sessions'), { recursive: true });
-  await fs.mkdir(PLUGINS_DIR, { recursive: true });
-  await fs.mkdir(SKILLS_DIR, { recursive: true });
+  await fs.mkdir(configDir, { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'memory', 'recent'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'memory', 'people'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'memory', 'dates'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'memory', 'interests'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'memory', 'diary'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'agent-todo', 'pending'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'agent-todo', 'scheduled'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'agent-todo', 'completed'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(dataDir, 'sessions'), { recursive: true });
+  await fs.mkdir(SHARED_PLUGINS_DIR, { recursive: true });
+  await fs.mkdir(SHARED_SKILLS_DIR, { recursive: true });
 
   // config
   const config = {
@@ -277,8 +282,8 @@ export async function runSetup(): Promise<void> {
     },
     memory: { consolidateAt: '00:00' },
   };
-  await fs.writeFile(paths.configJson, JSON.stringify(config, null, 2));
-  ok(paths.configJson);
+  await fs.writeFile(p.configJson, JSON.stringify(config, null, 2));
+  ok(p.configJson);
 
   // manifest — paths are relative to FABIANA_HOME (the PermissionValidator baseDir)
   const manifest = {
@@ -290,8 +295,8 @@ export async function runSetup(): Promise<void> {
       appendonly: ['data/logs/**'],
     },
   };
-  await fs.writeFile(paths.manifestJson, JSON.stringify(manifest, null, 2));
-  ok(paths.manifestJson);
+  await fs.writeFile(p.manifestJson, JSON.stringify(manifest, null, 2));
+  ok(p.manifestJson);
 
   // plugins.json
   const pluginsConfig: Record<string, { enabled: boolean; [key: string]: unknown }> = {};
@@ -302,8 +307,8 @@ export async function runSetup(): Promise<void> {
     pluginsConfig['calendar'].lookAheadHours = 24;
     pluginsConfig['calendar'].meetingPrepMinutesBefore = 60;
   }
-  await fs.writeFile(paths.pluginsJson, JSON.stringify(pluginsConfig, null, 2));
-  ok(paths.pluginsJson);
+  await fs.writeFile(p.pluginsJson, JSON.stringify(pluginsConfig, null, 2));
+  ok(p.pluginsJson);
 
   // system prompts
   const systemMdContent = fillTemplate(systemPromptTemplate, templateVars);
@@ -315,44 +320,44 @@ If ${userName} (or you) refers to "your codebase", "your source code", or "how y
 
 You can read those files to understand your own capabilities and limitations.
 `;
-  await fs.writeFile(paths.systemMd(), systemMdContent + fileAccessSection);
-  ok(paths.systemMd());
-  await fs.writeFile(paths.systemMd('chat'), fillTemplate(systemChatTemplate, templateVars));
-  ok(paths.systemMd('chat'));
-  await fs.writeFile(paths.systemMd('initiative'), fillTemplate(systemInitiativeTemplate, templateVars));
-  ok(paths.systemMd('initiative'));
-  await fs.writeFile(paths.systemMd('consolidate'), fillTemplate(systemConsolidateTemplate, templateVars));
-  ok(paths.systemMd('consolidate'));
-  await fs.writeFile(paths.systemMd('external'), fillTemplate(systemExternalTemplate, templateVars));
-  ok(paths.systemMd('external'));
-  await fs.writeFile(paths.systemMd('solitude'), fillTemplate(systemSolitudeTemplate, templateVars));
-  ok(paths.systemMd('solitude'));
+  await fs.writeFile(p.systemMd(), systemMdContent + fileAccessSection);
+  ok(p.systemMd());
+  await fs.writeFile(p.systemMd('chat'), fillTemplate(systemChatTemplate, templateVars));
+  ok(p.systemMd('chat'));
+  await fs.writeFile(p.systemMd('initiative'), fillTemplate(systemInitiativeTemplate, templateVars));
+  ok(p.systemMd('initiative'));
+  await fs.writeFile(p.systemMd('consolidate'), fillTemplate(systemConsolidateTemplate, templateVars));
+  ok(p.systemMd('consolidate'));
+  await fs.writeFile(p.systemMd('external'), fillTemplate(systemExternalTemplate, templateVars));
+  ok(p.systemMd('external'));
+  await fs.writeFile(p.systemMd('solitude'), fillTemplate(systemSolitudeTemplate, templateVars));
+  ok(p.systemMd('solitude'));
 
   // seed memory
   const today = new Date().toISOString().split('T')[0];
-  await fs.writeFile(paths.memory('identity.md'), `# Identity\n\n- [${today}] Name: ${userName}\n`);
+  await fs.writeFile(p.memory('identity.md'), `# Identity\n\n- [${today}] Name: ${userName}\n`);
   await fs.writeFile(
-    paths.memory('core.md'),
+    p.memory('core.md'),
     `# Core State\n\nlast_message_sent: never\nactive_threads: []\nnotes: ${botName} initialized on ${today}\n`
   );
   await fs.writeFile(
-    paths.memory('recent', 'this-week.md'),
+    p.memory('recent', 'this-week.md'),
     `# This Week\n\n- [${today}] ${botName} initialized.\n`
   );
-  ok(`${DATA_DIR}/memory/ (seeded)`);
+  ok(`${dataDir}/memory/ (seeded)`);
 
   // state — tracks first-run intro
   await fs.writeFile(
-    paths.stateJson,
+    p.stateJson,
     JSON.stringify({ introduced: false, userName, botName, toneKey }, null, 2)
   );
-  ok(paths.stateJson);
+  ok(p.stateJson);
 
-  // copy bundled default plugins (skip any already installed)
+  // copy bundled default plugins to shared dir (skip any already installed)
   try {
     const bundledDirs = await fs.readdir(BUNDLED_PLUGINS_DIR, { withFileTypes: true });
     for (const entry of bundledDirs.filter(e => e.isDirectory())) {
-      const dest = path.join(PLUGINS_DIR, entry.name);
+      const dest = path.join(SHARED_PLUGINS_DIR, entry.name);
       try {
         await fs.access(dest);
         // already exists — skip so user customisations are preserved
@@ -360,16 +365,16 @@ You can read those files to understand your own capabilities and limitations.
         await fs.cp(path.join(BUNDLED_PLUGINS_DIR, entry.name), dest, { recursive: true });
       }
     }
-    ok(`${PLUGINS_DIR}/ (default plugins copied)`);
+    ok(`${SHARED_PLUGINS_DIR}/ (default plugins copied)`);
   } catch {
     // No bundled plugins dir — dev environment or stripped build, skip silently
   }
 
-  // copy bundled default skills (skip any already installed)
+  // copy bundled default skills to shared dir (skip any already installed)
   try {
     const bundledSkillDirs = await fs.readdir(BUNDLED_SKILLS_DIR, { withFileTypes: true });
     for (const entry of bundledSkillDirs.filter(e => e.isDirectory())) {
-      const dest = path.join(SKILLS_DIR, entry.name);
+      const dest = path.join(SHARED_SKILLS_DIR, entry.name);
       try {
         await fs.access(dest);
         // already exists — skip so user customisations are preserved
@@ -377,16 +382,19 @@ You can read those files to understand your own capabilities and limitations.
         await fs.cp(path.join(BUNDLED_SKILLS_DIR, entry.name), dest, { recursive: true });
       }
     }
-    ok(`${SKILLS_DIR}/ (default skills copied)`);
+    ok(`${SHARED_SKILLS_DIR}/ (default skills copied)`);
   } catch {
     // No bundled skills dir — dev environment or stripped build, skip silently
   }
 
-  // initialise SQLite memory DB
-  initDb();
+  // initialise SQLite memory DB for this agent
+  initDb(p.memoryDb);
+
+  // register agent in agents.json (no-op for 'default' on first install)
+  await addAgent(path.basename(home));
 
   // ── API key setup ─────────────────────────────────────────────
-  const envPath = paths.envFile;
+  const envPath = p.envFile;
   const shell = process.env.SHELL ?? '';
   const rcFile = shell.includes('zsh') ? '~/.zshrc' : '~/.bashrc';
 
@@ -462,6 +470,6 @@ You can read those files to understand your own capabilities and limitations.
   console.log(`\n  ${chalk.dim('Or run a single proactive check to test initiative mode:')}\n`);
   code('fabiana initiative');
 
-  console.log(`\n  ${chalk.dim(`Config lives at: ${CONFIG_DIR}/`)}`);
-  console.log(`  ${chalk.dim(`To customize the system prompt, edit: ${paths.systemMd()}`)}\n`);
+  console.log(`\n  ${chalk.dim(`Config lives at: ${configDir}/`)}`);
+  console.log(`  ${chalk.dim(`To customize the system prompt, edit: ${p.systemMd()}`)}\n`);
 }

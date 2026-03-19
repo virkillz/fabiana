@@ -1,10 +1,21 @@
 import { Type } from '@sinclair/typebox';
 import type { ToolDefinition } from '@mariozechner/pi-coding-agent';
-import { GoogleGenAI } from '@google/genai';
 import fs from 'fs/promises';
 import path from 'path';
 
-const MODEL = 'gemini-2.5-flash-preview-05-20';
+const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const MODEL = 'gemini-2.0-flash-preview-image-generation';
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: { parts?: GeminiPart[] };
+  }>;
+}
 
 async function sendTelegramPhoto(
   token: string,
@@ -71,60 +82,58 @@ For creative art and personal self-expression, use generate_image (Stable Diffus
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Build parts — add input image if provided
-      const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+      const parts: GeminiPart[] = [];
 
       if (input_image_path) {
         const imageData = await fs.readFile(input_image_path);
         const ext = path.extname(input_image_path).toLowerCase().replace('.', '');
         const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
-        const inputMimeType = mimeMap[ext] ?? 'image/jpeg';
-        parts.push({ inlineData: { mimeType: inputMimeType, data: imageData.toString('base64') } });
+        parts.push({ inlineData: { mimeType: mimeMap[ext] ?? 'image/jpeg', data: imageData.toString('base64') } });
       }
 
       parts.push({ text: prompt });
 
-      const response = await ai.models.generateContentStream({
-        model: MODEL,
-        config: {
-          responseModalities: ['IMAGE', 'TEXT'],
+      const response = await fetch(
+        `${API_BASE}/models/${MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+          }),
         },
-        contents: [{ role: 'user', parts }],
-      });
+      );
 
-      let imageBuffer: Buffer | undefined;
-      let imageMimeType = 'image/jpeg';
-      const textParts: string[] = [];
-
-      for await (const chunk of response) {
-        const chunkParts = chunk.candidates?.[0]?.content?.parts ?? [];
-        for (const part of chunkParts) {
-          if ((part as any).inlineData) {
-            const inlineData = (part as any).inlineData;
-            imageBuffer = Buffer.from(inlineData.data ?? '', 'base64');
-            imageMimeType = inlineData.mimeType ?? 'image/jpeg';
-          } else if (chunk.text) {
-            textParts.push(chunk.text);
-          }
-        }
-      }
-
-      if (!imageBuffer) {
-        const textResponse = textParts.join('').trim();
+      if (!response.ok) {
+        const body = await response.text();
         return {
-          content: [{ type: 'text' as const, text: `❌ Gemini did not return an image.${textResponse ? ` Response: ${textResponse}` : ''}` }],
-          details: { error: 'No image in response', text: textResponse },
+          content: [{ type: 'text' as const, text: `❌ Gemini API error (${response.status}): ${body.slice(0, 300)}` }],
+          details: { error: body },
         };
       }
 
-      await sendTelegramPhoto(token, chatId, imageBuffer, imageMimeType, caption);
+      const data = await response.json() as GeminiResponse;
+      const parts_out = data.candidates?.[0]?.content?.parts ?? [];
+
+      const imagePart = parts_out.find(p => p.inlineData);
+      if (!imagePart?.inlineData) {
+        const text = parts_out.find(p => p.text)?.text ?? '';
+        return {
+          content: [{ type: 'text' as const, text: `❌ Gemini returned no image.${text ? ` Response: ${text}` : ''}` }],
+          details: { error: 'No image in response', text },
+        };
+      }
+
+      const { mimeType, data: b64 } = imagePart.inlineData;
+      const imageBuffer = Buffer.from(b64, 'base64');
+
+      await sendTelegramPhoto(token, chatId, imageBuffer, mimeType, caption);
 
       const mode = input_image_path ? 'edited' : 'generated';
       return {
         content: [{ type: 'text' as const, text: `✅ Image ${mode} and sent! Prompt: "${prompt}"` }],
-        details: { prompt, mode, bytes: imageBuffer.length, mimeType: imageMimeType },
+        details: { prompt, mode, bytes: imageBuffer.length, mimeType },
       };
     } catch (err: any) {
       return {
@@ -138,6 +147,6 @@ For creative art and personal self-expression, use generate_image (Stable Diffus
 export const metadata = {
   name: 'gemini-image',
   version: '1.0.0',
-  description: 'Work-focused image generation and editing via Google Gemini',
+  description: 'Work-focused image generation and editing via Google Gemini REST API',
   author: 'fabiana-core',
 };

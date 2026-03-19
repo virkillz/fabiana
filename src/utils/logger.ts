@@ -8,10 +8,11 @@ export class Logger {
     this.logPath = logPath;
   }
 
-  static create(): Logger {
+  static create(logsDir?: (filename: string) => string): Logger {
+    const logsFn = logsDir ?? paths.logs;
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return new Logger(paths.logs(`${month}.log`));
+    return new Logger(logsFn(`${month}.log`));
   }
 
   private timestamp(): string {

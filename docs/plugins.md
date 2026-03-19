@@ -2,6 +2,8 @@
 
 A plugin is a self-contained directory with three files. You can place it directly in `plugins/` for local use, or publish it as a GitHub repo for others to install with `fabiana plugins add`.
 
+> **Path convention:** `<agent-home>` refers to `~/.fabiana/agents/<name>/` (e.g. `~/.fabiana/agents/default/` for the default agent). Plugins themselves live at `~/.fabiana/plugins/` and are **shared across all agents** — each agent controls which ones are active via its own `<agent-home>/config/plugins.json`.
+
 ## Skills vs. plugins
 
 Fabiana has two extension mechanisms. Choose the right one before you start:
@@ -132,7 +134,7 @@ export const tool: ToolDefinition = {
 
 ## `plugin.json`
 
-The manifest is what makes your plugin installable via `fabiana plugins add`. It declares metadata, required environment variables, and default config that gets written into `.fabiana/config/plugins.json` on install.
+The manifest is what makes your plugin installable via `fabiana plugins add`. It declares metadata, required environment variables, and default config that gets written into `<agent-home>/config/plugins.json` on install.
 
 ```json
 {
@@ -191,7 +193,7 @@ cp -r dist/plugins/my-plugin ~/.fabiana/plugins/my-plugin
 
 > Repeat steps 2–3 any time you update the plugin source. The `dist/` output is what gets deployed — never copy the raw `index.ts` to `~/.fabiana/plugins/`.
 
-To configure or disable it, add an entry to `~/.fabiana/config/plugins.json`:
+To configure or disable it, add an entry to `<agent-home>/config/plugins.json`:
 
 ```json
 {
@@ -218,7 +220,7 @@ What happens under the hood:
 3. Runs `npm install` for any `dependencies` declared in `package.json`
 4. Bundles `index.ts` (or `index.js`) into a single `plugins/<name>/index.js` using esbuild — your deps are inlined, Fabiana's own deps stay external
 5. Copies `plugin.json` alongside the bundle
-6. Merges default config from `plugin.json` into `.fabiana/config/plugins.json`
+6. Merges default config from `plugin.json` into `<agent-home>/config/plugins.json`
 7. Prints any environment variables the plugin needs
 
 **You do not need to pre-compile or commit built files.** Ship TypeScript source — Fabiana handles the rest.

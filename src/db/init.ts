@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import { paths } from '../paths.js';
@@ -10,7 +10,9 @@ function schemaPath(): string {
   return join(__dir, 'schema.sql');
 }
 
-export function initDb(): void {
+export function initDb(dbPath?: string): void {
+  const targetDb = dbPath ?? paths.memoryDb;
+
   // Check sqlite3 is available
   try {
     execSync('sqlite3 --version', { stdio: 'ignore' });
@@ -22,7 +24,7 @@ export function initDb(): void {
     return;
   }
 
-  if (existsSync(paths.memoryDb)) return;
+  if (existsSync(targetDb)) return;
 
   const schema = schemaPath();
   if (!existsSync(schema)) {
@@ -31,8 +33,8 @@ export function initDb(): void {
   }
 
   try {
-    execSync(`sqlite3 "${paths.memoryDb}" < "${schema}"`);
-    console.log(`[memory-db] Initialized ${paths.memoryDb}`);
+    execSync(`sqlite3 "${targetDb}" < "${schema}"`);
+    console.log(`[memory-db] Initialized ${targetDb}`);
   } catch (err: any) {
     console.warn(`[memory-db] Failed to initialize DB: ${err.message}`);
   }

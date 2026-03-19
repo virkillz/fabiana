@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import { SKILLS_DIR, paths } from '../paths.js';
+import { SHARED_SKILLS_DIR, paths, type AgentPaths } from '../paths.js';
 
 interface Skill {
   name: string;
@@ -28,20 +28,23 @@ function parseFrontmatter(content: string): Record<string, string> {
   return fm;
 }
 
-export async function loadFabianaSkills(): Promise<Skill[]> {
+export async function loadFabianaSkills(agentPaths?: AgentPaths): Promise<Skill[]> {
   const skills: Skill[] = [];
+  const skillsConfigPath = agentPaths?.skillsJson ?? paths.skillsJson;
 
-  if (!existsSync(SKILLS_DIR)) return skills;
+  // Skills directory: use shared dir (synced from package)
+  const skillsDir = SHARED_SKILLS_DIR;
+  if (!existsSync(skillsDir)) return skills;
 
   let config: SkillsConfig = {};
   try {
-    const raw = await fs.readFile(paths.skillsJson, 'utf-8');
+    const raw = await fs.readFile(skillsConfigPath, 'utf-8');
     config = JSON.parse(raw);
   } catch { /* no config — all enabled by default */ }
 
   let entries: string[] = [];
   try {
-    const dirEntries = await fs.readdir(SKILLS_DIR, { withFileTypes: true });
+    const dirEntries = await fs.readdir(skillsDir, { withFileTypes: true });
     entries = dirEntries.filter(e => e.isDirectory()).map(e => e.name);
   } catch { return skills; }
 
@@ -49,7 +52,7 @@ export async function loadFabianaSkills(): Promise<Skill[]> {
     const cfg = config[dir];
     if (cfg?.enabled === false) continue;
 
-    const skillFile = path.join(SKILLS_DIR, dir, 'SKILL.md');
+    const skillFile = path.join(skillsDir, dir, 'SKILL.md');
     try {
       const content = await fs.readFile(skillFile, 'utf-8');
       const fm = parseFrontmatter(content);
@@ -59,7 +62,7 @@ export async function loadFabianaSkills(): Promise<Skill[]> {
         name: fm.name || dir,
         description: fm.description,
         filePath: skillFile,
-        baseDir: path.join(SKILLS_DIR, dir),
+        baseDir: path.join(skillsDir, dir),
       });
     } catch { continue; }
   }

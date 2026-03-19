@@ -119,7 +119,7 @@ In `config.json`:
 
 ## System prompt
 
-The initiative mode system prompt lives at `~/.fabiana/config/system-initiative.md`. It loads on top of the base `system.md`. To edit it:
+The initiative mode system prompt lives at `<agent-home>/config/system-initiative.md` (e.g. `~/.fabiana/agents/default/config/system-initiative.md`). It loads on top of the base `system.md`. To edit it:
 
 ```
 fabiana system-prompt
@@ -131,6 +131,8 @@ The base prompt establishes who Fabiana is. The initiative overlay tells her the
 ---
 
 ## Logs
+
+All log files are per-agent, under `<agent-home>/data/logs/`:
 
 | File | Contents |
 |------|----------|

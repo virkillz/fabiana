@@ -4,6 +4,8 @@ A skill is a Markdown file that gives Fabiana specialized instructions for a spe
 
 Fabiana ships with no built-in skills — everything in `~/.fabiana/skills/` is user-installed.
 
+> **Path convention:** `<agent-home>` refers to `~/.fabiana/agents/<name>/` (e.g. `~/.fabiana/agents/default/` for the default agent). Skills themselves live at `~/.fabiana/skills/` and are **shared across all agents** — each agent controls which ones are active via its own `<agent-home>/config/skills.json`.
+
 ---
 
 ## When to use a skill vs. a plugin
@@ -84,7 +86,7 @@ mkdir -p ~/.fabiana/skills/my-skill
 # write your SKILL.md
 ```
 
-To disable without removing it, edit `~/.fabiana/config/skills.json`:
+To disable without removing it, edit `<agent-home>/config/skills.json`:
 
 ```json
 {
@@ -115,7 +117,7 @@ What happens under the hood:
 2. Validates that `SKILL.md` exists and has a `description` in frontmatter
 3. Copies the skill directory to `~/.fabiana/skills/<name>/`
 4. Runs `npm install` if a `package.json` with dependencies is present (for skills that ship helper scripts)
-5. Registers the skill as enabled in `~/.fabiana/config/skills.json`
+5. Registers the skill as enabled in `<agent-home>/config/skills.json`
 
 ---
 

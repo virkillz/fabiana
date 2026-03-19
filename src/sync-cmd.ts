@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { existsSync } from 'fs';
-import { PLUGINS_DIR, SKILLS_DIR, BUNDLED_PLUGINS_DIR, BUNDLED_SKILLS_DIR, PACKAGE_ROOT } from './paths.js';
+import { SHARED_PLUGINS_DIR, SHARED_SKILLS_DIR, BUNDLED_PLUGINS_DIR, BUNDLED_SKILLS_DIR, PACKAGE_ROOT } from './paths.js';
 
 const G = '\x1b[32m'; // green
 const Y = '\x1b[33m'; // yellow
@@ -85,14 +85,14 @@ export async function runSync(): Promise<void> {
     pluginsSrc = distPlugins;
   }
 
-  // Step 3: sync plugins
-  const plugins = await syncDir(pluginsSrc, PLUGINS_DIR, 'Plugins');
+  // Step 3: sync plugins to shared dir
+  const plugins = await syncDir(pluginsSrc, SHARED_PLUGINS_DIR, 'Plugins');
   if (plugins.added.length)   ok(`Plugins added`,   plugins.added.join(', '));
   if (plugins.updated.length) ok(`Plugins updated`, plugins.updated.join(', '));
   if (!plugins.added.length && !plugins.updated.length) skip('Plugins', 'none found');
 
-  // Step 4: sync skills
-  const skills = await syncDir(BUNDLED_SKILLS_DIR, SKILLS_DIR, 'Skills');
+  // Step 4: sync skills to shared dir
+  const skills = await syncDir(BUNDLED_SKILLS_DIR, SHARED_SKILLS_DIR, 'Skills');
   if (skills.added.length)   ok(`Skills added`,   skills.added.join(', '));
   if (skills.updated.length) ok(`Skills updated`, skills.updated.join(', '));
   if (!skills.added.length && !skills.updated.length) skip('Skills', 'none found');

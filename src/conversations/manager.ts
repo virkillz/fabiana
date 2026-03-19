@@ -3,12 +3,16 @@ import path from 'path';
 import type { ConversationState, CreateConversationOpts } from './types.js';
 import { paths } from '../paths.js';
 
-const DATA_DIR = paths.conversations;
-
 /** 4 days of inactivity → auto-expire */
 const EXPIRY_MS = 4 * 24 * 60 * 60 * 1000;
 
 export class ConversationManager {
+  private dataDir: string;
+
+  constructor(conversationsDir?: string) {
+    this.dataDir = conversationsDir ?? paths.conversations;
+  }
+
   async find(channel: string, userId: string, threadId: string): Promise<ConversationState | null> {
     const all = await this.listOpen();
     return (
@@ -19,7 +23,7 @@ export class ConversationManager {
   }
 
   async create(opts: CreateConversationOpts): Promise<ConversationState> {
-    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.mkdir(this.dataDir, { recursive: true });
 
     const date = new Date().toISOString().slice(0, 10);
     const slug = opts.purpose
@@ -28,7 +32,7 @@ export class ConversationManager {
       .replace(/^-|-$/g, '')
       .slice(0, 40);
     const id = `${opts.channel}-${opts.externalUserId}-${date}-${slug}`;
-    const filePath = path.join(DATA_DIR, `${id}.md`);
+    const filePath = path.join(this.dataDir, `${id}.md`);
     const now = new Date().toISOString();
 
     const frontmatter = [
@@ -71,7 +75,7 @@ export class ConversationManager {
   }
 
   async append(id: string, role: string, text: string): Promise<void> {
-    const filePath = path.join(DATA_DIR, `${id}.md`);
+    const filePath = path.join(this.dataDir, `${id}.md`);
     const timestamp = new Date().toISOString();
     const icon = role === 'fabiana' ? '🌸 Fabiana' : `👤 ${role}`;
     const entry = `[${timestamp}] ${icon}: ${text}\n`;
@@ -80,7 +84,7 @@ export class ConversationManager {
   }
 
   async close(id: string, status: 'resolved' | 'owner-notified'): Promise<void> {
-    const filePath = path.join(DATA_DIR, `${id}.md`);
+    const filePath = path.join(this.dataDir, `${id}.md`);
     await this.updateFrontmatterField(filePath, 'status', status);
   }
 
@@ -95,7 +99,7 @@ export class ConversationManager {
   }
 
   async getById(id: string): Promise<ConversationState | null> {
-    return this.parseFile(path.join(DATA_DIR, `${id}.md`));
+    return this.parseFile(path.join(this.dataDir, `${id}.md`));
   }
 
   /**
@@ -117,8 +121,8 @@ export class ConversationManager {
 
   private async listFiles(): Promise<string[]> {
     try {
-      const entries = await fs.readdir(DATA_DIR);
-      return entries.filter((e) => e.endsWith('.md')).map((e) => path.join(DATA_DIR, e));
+      const entries = await fs.readdir(this.dataDir);
+      return entries.filter((e) => e.endsWith('.md')).map((e) => path.join(this.dataDir, e));
     } catch {
       return [];
     }
